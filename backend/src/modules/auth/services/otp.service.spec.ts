@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import type { EnvVars } from '../../../config/env.validation.js';
 import { FakeRedis } from '../../../../test/utils/fake-redis.js';
 import type { RedisService } from '../../../database/redis.service.js';
 import type { OtpMessage, OtpSender } from './otp-sender.js';
@@ -34,7 +35,7 @@ describe('OtpService', () => {
       redis as unknown as RedisService,
       {
         get: (k: keyof typeof config) => config[k],
-      } as unknown as ConfigService,
+      } as unknown as ConfigService<EnvVars, true>,
       sender,
     );
   });
@@ -100,6 +101,30 @@ describe('OtpService', () => {
     clock += 61_000;
     await service.issue('verify_email', 'a@b.com');
     expect(sent).toHaveLength(2);
+  });
+
+  it('lifts the cooldown if the code could not be handed to the mailer', async () => {
+    const failing = new OtpService(
+      redis as unknown as RedisService,
+      {
+        get: (k: keyof typeof config) => config[k],
+      } as unknown as ConfigService<EnvVars, true>,
+      { send: () => Promise.reject(new Error('queue down')) },
+    );
+    await expect(failing.issue('verify_email', 'a@b.com')).rejects.toThrow(
+      'queue down',
+    );
+    // A retry right away is allowed (no 60s lock-out for an email never sent).
+    await service.issue('verify_email', 'a@b.com');
+    expect(sent).toHaveLength(1);
+  });
+
+  it('passes staff-invite context through to the sender', async () => {
+    await service.issue('reset_password', 'a@b.com', {
+      intent: 'staff_invite',
+      role: 'editor',
+    });
+    expect(sent[0]).toMatchObject({ intent: 'staff_invite', role: 'editor' });
   });
 
   it('a new code replaces the old one and resets attempts', async () => {

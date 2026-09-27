@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConditionalModule, ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { CommonModule } from './common/common.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
@@ -10,7 +10,10 @@ import { AdminModule } from './modules/admin/admin.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { MailWorkerModule } from './modules/mail/mail-worker.module.js';
+import { MailModule } from './modules/mail/mail.module.js';
 import { ProfileModule } from './modules/profile/profile.module.js';
+import { QueueModule } from './queue/queue.module.js';
 import { StorageModule } from './storage/storage.module.js';
 
 @Module({
@@ -25,6 +28,12 @@ import { StorageModule } from './storage/storage.module.js';
     DatabaseModule,
     CommonModule,
     StorageModule,
+    QueueModule,
+    MailModule,
+    ConditionalModule.registerWhen(
+      MailWorkerModule,
+      (env) => env.MAIL_WORKER_ENABLED !== 'false',
+    ),
     AuthModule,
     HealthModule,
     ProfileModule,

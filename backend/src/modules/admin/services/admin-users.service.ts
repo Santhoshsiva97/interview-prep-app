@@ -216,7 +216,10 @@ export class AdminUsersService {
       }
       throw err;
     }
-    await this.otp.issue('reset_password', user.email);
+    await this.otp.issue('reset_password', user.email, {
+      intent: 'staff_invite',
+      role: dto.role,
+    });
     return toAdminUserSummary(user);
   }
 

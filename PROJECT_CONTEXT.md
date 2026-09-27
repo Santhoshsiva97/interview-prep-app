@@ -89,6 +89,24 @@ users, the question bank, exams, payments, and ads.
 - Local: MinIO in docker-compose (`S3_ENDPOINT=http://minio:9000`, browser URLs signed for
   `S3_PUBLIC_ENDPOINT=http://localhost:9000`). Prod: AWS S3/R2; omit the endpoint and use an IAM role.
 
+### Mail & queues (Step 5)
+- **Never send email from a request handler.** Call `MailService.enqueue({ to, template, data, userId? })`
+  (`src/modules/mail/services/mail.service.ts`). It writes a `mail_messages` row and adds a BullMQ job;
+  `MailProcessor` renders and sends it via Nodemailer, retrying with exponential backoff
+  (`MAIL_MAX_ATTEMPTS`=3, `MAIL_RETRY_BASE_DELAY_MS`=10 s → 10 s, 20 s). If the queue is unreachable,
+  `enqueue` throws `503 MAIL_UNAVAILABLE`
+- New email = add a typed entry to `MailTemplates` + a renderer + `SAMPLE_DATA` in
+  `src/modules/mail/templates/index.ts`, using `renderLayout()` and escaping every value with `escapeHtml`.
+  Every template must produce subject, HTML and plain text. **Never put secrets (OTP codes, tokens) in the
+  subject**, because subjects are stored in `mail_messages`. Bodies are never stored
+- BullMQ: `QueueModule` (`src/queue/`) holds the shared connection (`maxRetriesPerRequest: null` for workers).
+  Producers register their queue with a fail-fast connection (`enableOfflineQueue: false`, as `MailModule` does).
+  Workers live in their own module loaded with `ConditionalModule.registerWhen(…, MAIL_WORKER_ENABLED)`
+- Transport: `MAIL_TRANSPORT=smtp` (any SMTP relay: SendGrid, SES, Mailpit) or `log` (dev/test only;
+  production refuses it)
+- Tests: `test/utils/test-app.ts` `createTestApp()` boots AppModule with Redis, S3, the mail queue and SMTP
+  faked; `t.lastCode(email)` runs the real MailProcessor and returns the code from the rendered email
+
 ### Frontend (React)
 - Routes are declared in `src/app/router.tsx`; unbuilt routes use `<ComingSoonPage title description>`
 - Three layouts: `AppLayout` (public site + auth screens), `PortalLayout` (candidate portal) and
@@ -123,7 +141,7 @@ users, the question bank, exams, payments, and ads.
   src/pages/                   route-level pages (Home, ComingSoon, NotFound, Error)
   src/pages/auth/              Signup, VerifyEmail, Login, ForgotPassword
   src/pages/portal/            Dashboard, Profile
-  src/pages/admin/             AdminDashboard, AdminUsers, AdminUserDetail, AdminStaff
+  src/pages/admin/             AdminDashboard, AdminUsers, AdminUserDetail, AdminStaff, AdminEmail
   src/features/admin/          admin API client + types, role/status badges
   src/features/auth/           AuthProvider/useAuth, RequireAuth, auth API client, AuthCard
   src/features/profile/        ProfileProvider/useProfile, profile API, Avatar, ProfileMenu
@@ -146,13 +164,16 @@ users, the question bank, exams, payments, and ads.
   src/modules/profile/         /me/profile, /me/avatar, /me/resume (+ upload rules)
   src/modules/dashboard/       /dashboard (widget contract)
   src/modules/admin/           /admin/dashboard, /admin/users/*, /admin/staff
+  src/modules/mail/            MailService (enqueue), MailProcessor (worker), templates/, transport,
+                               EmailOtpSender, /admin/mail (delivery log + previews)
+  src/queue/                   QueueModule (shared BullMQ connection)
   src/generated/prisma/        generated Prisma client (gitignored)
-  test/                        e2e tests + test/utils (FakeRedis)
+  test/                        e2e tests + test/utils (createTestApp, FakeRedis, FakeStorage, FakeQueue, CapturingTransport, fakeConfig)
 /db                            Prisma package (CLI + config)
   schema.prisma                data model
   prisma.config.ts             reads DATABASE_URL (env or ../backend/.env)
   migrations/                  SQL migrations
-docker-compose.yml             postgres, redis, minio, backend, frontend
+docker-compose.yml             postgres, redis, minio, mailpit, backend, frontend
 README.md                      setup instructions
 PROJECT_CONTEXT.md             ← this file
 PROGRESS_LOG.md                ← running build log, read this every session

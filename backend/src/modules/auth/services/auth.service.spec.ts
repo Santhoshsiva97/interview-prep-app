@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import type { EnvVars } from '../../../config/env.validation.js';
 import type { PrismaService } from '../../../database/prisma.service.js';
 import type { User } from '../../../generated/prisma/client.js';
 import { AuthService } from './auth.service.js';
@@ -20,6 +21,9 @@ const baseUser: User = {
   lastLoginAt: null,
   passwordChangedAt: null,
   googleId: null,
+  suspendedAt: null,
+  suspendedById: null,
+  suspensionReason: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   deletedAt: null,
@@ -77,7 +81,7 @@ describe('AuthService.login', () => {
       passwords as unknown as PasswordService,
       {} as OtpService,
       tokens as unknown as TokenService,
-      config as unknown as ConfigService,
+      config as unknown as ConfigService<EnvVars, true>,
     );
   });
 

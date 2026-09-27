@@ -1,10 +1,11 @@
 import { ConfigService } from '@nestjs/config';
+import type { EnvVars } from '../../config/env.validation.js';
 import { FakeRedis } from '../../../test/utils/fake-redis.js';
 import type { RedisService } from '../../database/redis.service.js';
 import { SessionRevocationService } from './session-revocation.service.js';
 
 describe('SessionRevocationService', () => {
-  const config = { get: () => 900 } as unknown as ConfigService;
+  const config = { get: () => 900 } as unknown as ConfigService<EnvVars, true>;
   let redis: FakeRedis;
   let service: SessionRevocationService;
 

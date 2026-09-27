@@ -50,6 +50,16 @@ services:
       timeout: 5s
       retries: 10
 
+  # Local SMTP catcher: the backend really sends mail here. Inbox UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.31
+    ports:
+      - '${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '${MAILPIT_UI_PORT:-8025}:8025'
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 'true'
+      MP_SMTP_AUTH_ALLOW_INSECURE: 'true'
+
   backend:
     build:
       context: .
@@ -71,6 +81,12 @@ services:
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-minioadmin}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-minioadmin}
       S3_BUCKET: ${S3_BUCKET:-interview-prep}
+      # Mail goes through BullMQ (Redis) to Mailpit over real SMTP.
+      MAIL_TRANSPORT: smtp
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_SECURE: 'false'
+      APP_BASE_URL: http://localhost:5173
       # Poll for file changes — fs events don't cross Windows/macOS bind mounts.
       TSC_WATCHFILE: DynamicPriorityPolling
     ports:
@@ -88,6 +104,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      mailpit:
+        condition: service_started
 
   frontend:
     build:

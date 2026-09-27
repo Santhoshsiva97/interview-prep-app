@@ -4,7 +4,12 @@ import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import type { EnvVars } from '../../../config/env.validation.js';
 import { RedisService } from '../../../database/redis.service.js';
 import { AuthError } from '../models/auth-error.js';
-import { OTP_SENDER, type OtpPurpose, type OtpSender } from './otp-sender.js';
+import {
+  OTP_SENDER,
+  type OtpMessage,
+  type OtpPurpose,
+  type OtpSender,
+} from './otp-sender.js';
 
 const hashCode = (code: string) =>
   createHash('sha256').update(code).digest('hex');
@@ -32,7 +37,11 @@ export class OtpService {
   }
 
   /** Generates, stores and sends a new code (replacing any previous one). */
-  async issue(purpose: OtpPurpose, email: string): Promise<void> {
+  async issue(
+    purpose: OtpPurpose,
+    email: string,
+    extras: Pick<OtpMessage, 'intent' | 'role'> = {},
+  ): Promise<void> {
     const keys = this.keys(purpose, email);
 
     if (this.cooldown > 0) {
@@ -60,12 +69,19 @@ export class OtpService {
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
     await this.redis.set(keys.code, hashCode(code), 'EX', this.ttl);
     await this.redis.del(keys.attempts);
-    await this.sender.send({
-      email,
-      code,
-      purpose,
-      expiresInSeconds: this.ttl,
-    });
+    try {
+      await this.sender.send({
+        email,
+        code,
+        purpose,
+        expiresInSeconds: this.ttl,
+        ...extras,
+      });
+    } catch (err) {
+      // Nothing was delivered: don't make the user wait out the cooldown.
+      await this.redis.del(keys.cooldown, keys.code).catch(() => undefined);
+      throw err;
+    }
   }
 
   /** Consumes the code if it matches; throws otherwise. */

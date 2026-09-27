@@ -34,6 +34,26 @@ export interface EnvVars {
   /** Create the bucket on startup if missing (dev convenience). */
   S3_AUTO_CREATE_BUCKET: boolean;
   S3_PRESIGNED_URL_TTL_SECONDS: number;
+
+  // ── Mail (FRD §4.5) ──
+  /** `smtp` sends for real (SendGrid, SES, Mailpit…); `log` prints emails (dev/test only). */
+  MAIL_TRANSPORT: 'smtp' | 'log';
+  SMTP_HOST?: string;
+  SMTP_PORT: number;
+  /** true = implicit TLS (port 465); false = STARTTLS when offered (587/25). */
+  SMTP_SECURE: boolean;
+  SMTP_USER?: string;
+  SMTP_PASS?: string;
+  /** e.g. `InterviewPrep <no-reply@yourdomain.com>` (must be a verified sender). */
+  MAIL_FROM: string;
+  MAIL_REPLY_TO?: string;
+  /** Public URL of the web app, used for links inside emails. */
+  APP_BASE_URL: string;
+  /** Total send attempts per email (first try + retries), exponential backoff. */
+  MAIL_MAX_ATTEMPTS: number;
+  MAIL_RETRY_BASE_DELAY_MS: number;
+  /** Run the mail worker in this process (disable to run workers separately). */
+  MAIL_WORKER_ENABLED: boolean;
 }
 
 // Validated once at boot; the app refuses to start on a bad/missing value.
@@ -83,4 +103,30 @@ export const envValidationSchema = Joi.object<EnvVars, true>({
     .min(60)
     .max(604800)
     .default(3600),
+
+  MAIL_TRANSPORT: Joi.string()
+    .valid('smtp', 'log')
+    .when('NODE_ENV', {
+      is: 'production',
+      then: Joi.valid('smtp').default('smtp'),
+      otherwise: Joi.string().default('log'),
+    }),
+  SMTP_HOST: Joi.string().hostname().when('MAIL_TRANSPORT', {
+    is: 'smtp',
+    then: Joi.required(),
+  }),
+  SMTP_PORT: Joi.number().port().default(587),
+  SMTP_SECURE: Joi.boolean().default(false),
+  SMTP_USER: Joi.string(),
+  SMTP_PASS: Joi.string(),
+  MAIL_FROM: Joi.string().default(
+    'InterviewPrep <no-reply@interviewprep.local>',
+  ),
+  MAIL_REPLY_TO: Joi.string().email(),
+  APP_BASE_URL: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .default('http://localhost:5173'),
+  MAIL_MAX_ATTEMPTS: Joi.number().integer().min(1).max(10).default(3),
+  MAIL_RETRY_BASE_DELAY_MS: Joi.number().integer().min(100).default(10_000),
+  MAIL_WORKER_ENABLED: Joi.boolean().default(true),
 });

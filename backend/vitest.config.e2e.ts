@@ -15,6 +15,8 @@ export default defineConfig({
       REDIS_URL: 'redis://localhost:6379',
       JWT_ACCESS_SECRET: 'test-secret-test-secret-test-secret-0000',
       S3_AUTO_CREATE_BUCKET: 'false',
+      MAIL_TRANSPORT: 'log',
+      MAIL_WORKER_ENABLED: 'false',
     },
   },
 });

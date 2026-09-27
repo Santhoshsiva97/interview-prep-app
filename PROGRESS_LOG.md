@@ -289,3 +289,92 @@ with the API's `@Roles()`). To make a KPI live: return `{ status: 'live', data }
 - Step 7/11/12: replace the admin placeholders above and add their roles to `ADMIN_NAV`.
 - The local Prisma dev Postgres (no Docker) can't run concurrent queries, so there are sporadic 500s
   in the browser. That's documented in the README and isn't an app bug.
+
+---
+
+## 2026-09-27 — Step 5: Mail Module (FRD §4.5) ✅
+
+Branch `step-5-mail-module` (on top of `step-4-admin-portal`). The FRD wasn't attached, so code cites
+"FRD §4.5" rather than FR-5.x numbers.
+
+**✅ OTP emails now send for real.** Step 2's `ConsoleOtpSender` stub is gone. `AuthModule` binds `OTP_SENDER` →
+`EmailOtpSender` (`backend/src/modules/mail/services/email-otp-sender.ts`), which queues a templated email.
+Sign-up verification, resend, forgot password and staff invites all go through it. The auth code needed no
+other changes (the Step 2 hook worked as designed).
+
+**Templates** (`backend/src/modules/mail/templates/`, shared `renderLayout()`: table-based, inline styles,
+HTML + plain text, every value escaped)
+| Template | Status | Triggered by |
+|---|---|---|
+| `verify_email` | **Live** | sign-up, re-register, "resend code", login while unverified |
+| `reset_password` | **Live** | forgot password |
+| `staff_invite` | **Live** (bonus) | super admin creates a staff account (Step 4). Uses a reset code, with invitation wording |
+| `exam_reminder` | **Placeholder**: template + sample data only, nothing sends it | Step 7 should call `mailService.enqueue({ template: 'exam_reminder', data: { name, examTitle, startsAt, durationMinutes, examPath? } })` |
+
+**Pipeline**
+- `MailService.enqueue()` → inserts a `mail_messages` row (`queued`) → BullMQ job on queue `mail`
+  (`attempts: 3`, `backoff: exponential 10 s` → retries after 10 s and 20 s, `removeOnComplete`, `jobId` = mail id).
+  Request handlers never touch SMTP.
+- `MailProcessor` (BullMQ worker, concurrency 5) renders the email → Nodemailer SMTP → row becomes `sent` +
+  `providerMessageId`. On error the row becomes `retrying` (or `failed` with `failedAt` on the last attempt),
+  storing `lastError` and `attempts`, and the error is rethrown so BullMQ retries. Already-sent rows are skipped (idempotent).
+- If Redis/the queue is down, `enqueue` marks the row `failed` ("Could not queue: …") and the request gets
+  **503 `MAIL_UNAVAILABLE`**. `OtpService` then lifts the resend cooldown so the user can retry at once.
+- **Delivery log:** migration `20260927150000_mail_messages` adds `mail_messages` (to_address, template, subject,
+  status `queued|sending|retrying|sent|failed`, attempts/max_attempts, provider_message_id, last_error,
+  last_attempt_at, sent_at, failed_at, user_id → users SET NULL + audit columns). **Bodies are never stored, and
+  OTP codes are kept out of subjects.** Job data (which contains the code) is removed from Redis on completion.
+- Admin API (FRD §4.5 visibility): `GET /api/v1/admin/mail?search&status&template&page` (admin, support);
+  `GET /api/v1/admin/mail/templates` and `/templates/:name/preview` (HTML with sample data, strict CSP;
+  admin, support, editor). UI: **Admin → Email** (delivery log with status/error/attempts + template previews
+  in a sandboxed iframe).
+
+**Env vars I need from you (SendGrid recommended; SES works the same way)**
+```
+MAIL_TRANSPORT=smtp
+SMTP_HOST=smtp.sendgrid.net        # SES: email-smtp.<region>.amazonaws.com
+SMTP_PORT=587
+SMTP_SECURE=false                  # true only for port 465
+SMTP_USER=apikey                   # SES: SMTP username
+SMTP_PASS=<SendGrid API key>       # SES: SMTP password
+MAIL_FROM="InterviewPrep <no-reply@your-verified-domain.com>"
+MAIL_REPLY_TO=support@your-domain.com   # optional
+APP_BASE_URL=https://your-app-url       # used in email links
+```
+Optional: `MAIL_MAX_ATTEMPTS` (3), `MAIL_RETRY_BASE_DELAY_MS` (10000), `MAIL_WORKER_ENABLED` (true; set false on
+API-only instances once workers run separately). In production `MAIL_TRANSPORT` must be `smtp`
+(config validation enforces it) and `SMTP_HOST` is required.
+
+**Local dev:** docker-compose gains **Mailpit** (`axllent/mailpit:v1.31`, inbox http://localhost:8025) and the backend
+container sends real SMTP to it. Without Docker, `MAIL_TRANSPORT=log` prints each email (`[DEV MAIL] …`).
+
+**Other changes**
+- New `QueueModule` (shared BullMQ connection from `REDIS_URL`, `maxRetriesPerRequest: null`). The mail producer
+  uses a fail-fast connection, and the worker is loaded via `ConditionalModule` (`MAIL_WORKER_ENABLED`).
+- Test infrastructure: `test/utils/test-app.ts` (`createTestApp`) now boots every e2e suite with fakes for Redis,
+  S3, the mail queue (`FakeQueue`, which drives the real `MailProcessor` with retries) and SMTP (`CapturingTransport`).
+  Auth/admin e2e tests now read OTP codes from the actual rendered emails. Suites also clean up their `mail_messages`.
+- **Type hygiene:** `npm run typecheck` (new) covers test files. It surfaced 15 latent type errors in specs from
+  Steps 2–4 (mis-typed ConfigService mocks, a nonexistent `supertest/types` import from the Nest scaffold, a user
+  fixture missing Step 4 columns), all fixed. `fakeConfig()` helper added.
+
+**Verified**
+- Backend: typecheck (0 errors), lint, build. 43 unit tests (templates: code in body but not subject, links,
+  HTML escaping; enqueue options; worker send/retry/final-failure/idempotency; queue-down → 503; OTP sender
+  template choice; cooldown lifted on send failure). 28 e2e tests against real Postgres, including a new mail suite:
+  sign-up queues without sending inline → worker sends → emailed code verifies the account; 2 failures then
+  success = `sent`, 3 attempts; 3 failures = `failed`; queue down = 503 + immediate retry allowed; admin log/filter/
+  previews/404/401. Stable across repeated runs.
+- **Real SMTP**, via a local `smtp-server` sink: the backend authenticated (SendGrid-style `apikey` user) and delivered
+  `multipart/alternative` (text + HTML). The rendered email looked right in the browser, and its code verified the account.
+  With the sink stopped: attempt 1 and attempt 2 failed (`ECONNREFUSED`, logged as `retrying`, backoff 10 s then
+  20 s). With the sink restarted, attempt 3 was `sent`.
+- Browser: Admin → Email shows the log (e.g. the reset at 3/3 attempts) and template previews.
+- **Not verified:** the real BullMQ worker against a real Redis. This machine has no Redis or Docker, so the
+  queue was simulated in-process (same processor code, same backoff formula). Run `docker compose up` and send a
+  sign-up; Mailpit should receive it. MinIO is also still unverified.
+
+**Notes for next steps**
+- Step 7: wire `exam_reminder` (scheduled BullMQ job, e.g. `delay` until 30 min before start).
+- Step 15 (notifications) can reuse the `QueueModule` pattern for its own queue.
+- A "resend" action for failed mails in Admin → Email would be easy to add (re-enqueue a new record).

@@ -128,6 +128,24 @@ export async function apiFetch<T>(
   }
 }
 
+/** GET returning text (e.g. an HTML email preview), with the same auth/refresh handling. */
+export async function apiFetchText(path: string): Promise<string> {
+  const load = () =>
+    fetch(`${API_BASE_URL}${path}`, {
+      credentials: 'include',
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    });
+  let res = await load().catch(() => {
+    throw new ApiError(0, { message: UNREACHABLE_MESSAGE });
+  });
+  if (res.status === 401 && accessToken && (await refreshAccessToken())) {
+    res = await load();
+  }
+  if (!res.ok)
+    throw new ApiError(res.status, await res.json().catch(() => null));
+  return res.text();
+}
+
 const withBody =
   (method: string) =>
   <T>(path: string, body?: unknown) =>

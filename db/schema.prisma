@@ -70,6 +70,7 @@ model User {
 
   refreshTokens  RefreshToken[]
   profile        UserProfile?
+  mailMessages   MailMessage[]
   suspendedBy    User?          @relation("UserSuspensions", fields: [suspendedById], references: [id], onDelete: SetNull)
   suspendedUsers User[]         @relation("UserSuspensions")
 
@@ -129,4 +130,46 @@ model RefreshToken {
   @@index([userId])
   @@index([familyId])
   @@map("refresh_tokens")
+}
+
+// ─────────────────────────────── Platform: Mail ───────────────────────────────
+
+enum MailStatus {
+  queued
+  sending
+  retrying
+  sent
+  failed
+
+  @@map("mail_status")
+}
+
+/// One row per outbound email (FRD §4.5): the delivery-status log. Message
+/// bodies are rendered from `template` at send time and never stored (they can
+/// contain one-time codes).
+model MailMessage {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String?    @map("user_id") @db.Uuid
+  toAddress         String     @map("to_address") @db.VarChar(254)
+  template          String     @db.VarChar(50)
+  subject           String     @db.VarChar(255)
+  status            MailStatus @default(queued)
+  attempts          Int        @default(0)
+  maxAttempts       Int        @map("max_attempts")
+  providerMessageId String?    @map("provider_message_id") @db.VarChar(255)
+  lastError         String?    @map("last_error") @db.VarChar(1000)
+  lastAttemptAt     DateTime?  @map("last_attempt_at") @db.Timestamptz(6)
+  sentAt            DateTime?  @map("sent_at") @db.Timestamptz(6)
+  failedAt          DateTime?  @map("failed_at") @db.Timestamptz(6)
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt         DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([toAddress])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("mail_messages")
 }

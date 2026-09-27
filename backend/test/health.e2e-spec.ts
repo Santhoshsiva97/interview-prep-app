@@ -1,27 +1,16 @@
 import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from '../src/app.module.js';
-import { configureApp } from '../src/app.setup.js';
-import { PrismaService } from '../src/database/prisma.service.js';
-import { RedisService } from '../src/database/redis.service.js';
+import { createTestApp } from './utils/test-app.js';
 
 describe('Health (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication;
   const redis = { ping: vi.fn() };
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(PrismaService)
-      .useValue({ $queryRaw: vi.fn().mockResolvedValue([]) })
-      .overrideProvider(RedisService)
-      .useValue(redis)
-      .compile();
-
-    app = moduleRef.createNestApplication();
-    configureApp(app);
-    await app.init();
+    ({ app } = await createTestApp({
+      prisma: { $queryRaw: vi.fn().mockResolvedValue([]) },
+      redis,
+    }));
   });
 
   afterAll(async () => {

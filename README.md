@@ -29,6 +29,7 @@ docker compose up --build
 - Frontend: http://localhost:5173
 - API health: http://localhost:3000/api/v1/health
 - MinIO console (uploaded avatars/resumes): http://localhost:9001 (minioadmin / minioadmin)
+- Mailpit inbox (every email the app sends, including OTP codes): http://localhost:8025
 
 The backend container generates the Prisma client, applies pending migrations,
 then starts in watch mode. Source folders are bind-mounted, so edits hot-reload.
@@ -40,8 +41,8 @@ Stop with `docker compose down` (add `-v` to wipe the database volume).
 ## Option B — apps on the host, databases in Docker
 
 ```bash
-# 1. Start Postgres, Redis and MinIO only
-docker compose up -d postgres redis minio
+# 1. Start Postgres, Redis, MinIO and Mailpit only
+docker compose up -d postgres redis minio mailpit
 
 # 2. Database tooling (Prisma CLI) — reads DATABASE_URL from backend/.env
 cp backend/.env.example backend/.env
@@ -72,6 +73,22 @@ npm --prefix frontend run dev         # http://localhost:5173, proxies /api -> :
 | Frontend lint / build            | `npm --prefix frontend run lint` · `build`           |
 | Format                           | `npm --prefix backend run format` · `npm --prefix frontend run format` |
 
+### Email
+
+Outbound mail is queued with BullMQ (Redis) and sent over SMTP by a background worker.
+Set these in `backend/.env` (see `backend/.env.example`):
+
+| Provider | Settings |
+|---|---|
+| **SendGrid** (recommended) | `MAIL_TRANSPORT=smtp` · `SMTP_HOST=smtp.sendgrid.net` · `SMTP_PORT=587` · `SMTP_USER=apikey` · `SMTP_PASS=<SendGrid API key>` |
+| **AWS SES** | `MAIL_TRANSPORT=smtp` · `SMTP_HOST=email-smtp.<region>.amazonaws.com` · `SMTP_PORT=587` · `SMTP_USER` / `SMTP_PASS` = SES *SMTP* credentials (not IAM keys) |
+| Local (Docker) | preconfigured: Mailpit on `mailpit:1025`, inbox at http://localhost:8025 |
+| Local (no Docker) | `MAIL_TRANSPORT=log` prints each email, including codes, to the backend log |
+
+Always set `MAIL_FROM` to a sender you've verified with the provider (e.g. `InterviewPrep <no-reply@yourdomain.com>`),
+and `APP_BASE_URL` to the public web URL used in email links. Staff can check delivery status under
+**Admin → Email**.
+
 ### Dev notes
 
 - **First super admin:** sign up and verify an account, then run
@@ -79,8 +96,8 @@ npm --prefix frontend run dev         # http://localhost:5173, proxies /api -> :
   (in Docker: `docker compose exec backend npm run admin:promote -- you@example.com`). Log in
   again and you land in the admin console at `/admin`. Other staff are created from **Admin → Staff & Roles**.
 
-- **OTP codes** (sign-up verification, password reset) are printed to the backend log as
-  `[DEV OTP] ...` until the Mail Module (Step 5) sends real email.
+- **OTP codes** arrive by email. Locally, read them in Mailpit (Docker) or, with `MAIL_TRANSPORT=log`,
+  in the backend log as `[DEV MAIL] ...`.
 - **DB-backed e2e tests** run only when `E2E_DATABASE_URL` points at a migrated, throwaway database
   (they create and delete `@e2e.test` users):
   `E2E_DATABASE_URL=postgresql://prep:prep@localhost:5432/interview_prep npm --prefix backend run test:e2e`

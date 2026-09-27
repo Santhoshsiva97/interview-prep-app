@@ -1,36 +1,26 @@
 /**
- * Full auth flow over HTTP against a real Postgres (Redis is faked in-memory).
+ * Full auth flow over HTTP against a real Postgres. Redis, the mail queue and
+ * SMTP are faked in-memory; OTP codes are read from the emails actually rendered
+ * by the Mail Module.
  * Runs only when E2E_DATABASE_URL points at a migrated, disposable database:
  *   E2E_DATABASE_URL=postgres://... npm run test:e2e
  */
 import { INestApplication } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from '../src/app.module.js';
-import { configureApp } from '../src/app.setup.js';
+import { fakeConfig } from './utils/fake-config.js';
 import { PrismaService } from '../src/database/prisma.service.js';
-import { RedisService } from '../src/database/redis.service.js';
-import {
-  OTP_SENDER,
-  type OtpMessage,
-} from '../src/modules/auth/services/otp-sender.js';
-import { FakeRedis } from './utils/fake-redis.js';
+import { createTestApp, type TestApp } from './utils/test-app.js';
 
 const DB_URL = process.env.E2E_DATABASE_URL;
 const DOMAIN = '@e2e.test';
 
 describe.skipIf(!DB_URL)('Auth (e2e, real Postgres)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication;
   let prisma: PrismaService;
-  const outbox: OtpMessage[] = [];
+  let t: TestApp;
 
   const http = () => request(app.getHttpServer());
-  const lastCode = (email: string, purpose: OtpMessage['purpose']) =>
-    [...outbox]
-      .reverse()
-      .find((m) => m.email === email && m.purpose === purpose)!.code;
+  const lastCode = (email: string) => t.lastCode(email);
   const refreshCookie = (res: request.Response) =>
     ([] as string[])
       .concat(res.headers['set-cookie'] ?? [])
@@ -44,35 +34,25 @@ describe.skipIf(!DB_URL)('Auth (e2e, real Postgres)', () => {
       .expect(201);
     return http()
       .post('/api/v1/auth/verify-email')
-      .send({ email, code: lastCode(email, 'verify_email') })
+      .send({ email, code: await lastCode(email) })
       .expect(200);
   };
 
   beforeAll(async () => {
-    prisma = new PrismaService({
-      get: () => DB_URL,
-    } as unknown as ConfigService);
+    prisma = new PrismaService(fakeConfig({ DATABASE_URL: DB_URL }));
+    await prisma.mailMessage.deleteMany({
+      where: { toAddress: { endsWith: DOMAIN } },
+    });
     await prisma.user.deleteMany({ where: { email: { endsWith: DOMAIN } } });
 
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(PrismaService)
-      .useValue(prisma)
-      .overrideProvider(RedisService)
-      .useValue(new FakeRedis())
-      .overrideProvider(OTP_SENDER)
-      .useValue({
-        send: (m: OtpMessage) => {
-          outbox.push(m);
-          return Promise.resolve();
-        },
-      })
-      .compile();
-    app = moduleRef.createNestApplication();
-    configureApp(app);
-    await app.init();
+    t = await createTestApp({ prisma });
+    app = t.app;
   });
 
   afterAll(async () => {
+    await prisma?.mailMessage.deleteMany({
+      where: { toAddress: { endsWith: DOMAIN } },
+    });
     await prisma?.user.deleteMany({ where: { email: { endsWith: DOMAIN } } });
     await app?.close();
   });
@@ -102,15 +82,14 @@ describe.skipIf(!DB_URL)('Auth (e2e, real Postgres)', () => {
       .post('/api/v1/auth/verify-email')
       .send({
         email,
-        code:
-          '000000' === lastCode(email, 'verify_email') ? '111111' : '000000',
+        code: '000000' === (await lastCode(email)) ? '111111' : '000000',
       })
       .expect(400)
       .expect(({ body }) => expect(body.attemptsRemaining).toBe(4));
 
     const verified = await http()
       .post('/api/v1/auth/verify-email')
-      .send({ email, code: lastCode(email, 'verify_email') })
+      .send({ email, code: await lastCode(email) })
       .expect(200);
     expect(verified.body.user).toMatchObject({
       email,
@@ -212,7 +191,7 @@ describe.skipIf(!DB_URL)('Auth (e2e, real Postgres)', () => {
       .post('/api/v1/auth/reset-password')
       .send({
         email,
-        code: lastCode(email, 'reset_password'),
+        code: await lastCode(email),
         newPassword: 'newsecret456',
       })
       .expect(200);
@@ -232,12 +211,14 @@ describe.skipIf(!DB_URL)('Auth (e2e, real Postgres)', () => {
   });
 
   it('does not reveal whether an email exists on forgot-password', async () => {
-    const before = outbox.length;
+    await t.queue.drain();
+    const before = t.transport.sent.length;
     await http()
       .post('/api/v1/auth/forgot-password')
       .send({ email: `nobody${DOMAIN}` })
       .expect(202);
-    expect(outbox.length).toBe(before);
+    await t.queue.drain();
+    expect(t.transport.sent.length).toBe(before);
   });
 
   it('rejects duplicate sign-ups, bad input, and the deferred Google route', async () => {

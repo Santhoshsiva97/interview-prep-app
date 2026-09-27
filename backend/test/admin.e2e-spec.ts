@@ -3,23 +3,12 @@
  * Runs only with E2E_DATABASE_URL.
  */
 import { INestApplication } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
 import { hash } from '@node-rs/argon2';
 import request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from '../src/app.module.js';
-import { configureApp } from '../src/app.setup.js';
+import { fakeConfig } from './utils/fake-config.js';
 import { PrismaService } from '../src/database/prisma.service.js';
-import { RedisService } from '../src/database/redis.service.js';
 import type { UserRole } from '../src/generated/prisma/enums.js';
-import {
-  OTP_SENDER,
-  type OtpMessage,
-} from '../src/modules/auth/services/otp-sender.js';
-import { StorageService } from '../src/storage/storage.service.js';
-import { FakeRedis } from './utils/fake-redis.js';
-import { FakeStorage } from './utils/fake-storage.js';
+import { createTestApp, type TestApp } from './utils/test-app.js';
 
 const DB_URL = process.env.E2E_DATABASE_URL;
 const DOMAIN = '@e2e-admin.test';
@@ -32,16 +21,21 @@ interface Session {
 }
 
 describe.skipIf(!DB_URL)('Admin portal (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication;
   let prisma: PrismaService;
-  const outbox: OtpMessage[] = [];
+  let t: TestApp;
   const s: Record<string, Session> = {};
 
   const http = () => request(app.getHttpServer());
   const as = (who: string, req: request.Test) =>
     req.set('Authorization', `Bearer ${s[who].token}`);
   const cleanup = () =>
-    prisma.user.deleteMany({ where: { email: { endsWith: DOMAIN } } });
+    prisma.$transaction([
+      prisma.mailMessage.deleteMany({
+        where: { toAddress: { endsWith: DOMAIN } },
+      }),
+      prisma.user.deleteMany({ where: { email: { endsWith: DOMAIN } } }),
+    ]);
 
   const login = async (email: string, password = PASSWORD) => {
     const res = await http()
@@ -70,29 +64,11 @@ describe.skipIf(!DB_URL)('Admin portal (e2e)', () => {
   };
 
   beforeAll(async () => {
-    prisma = new PrismaService({
-      get: () => DB_URL,
-    } as unknown as ConfigService);
+    prisma = new PrismaService(fakeConfig({ DATABASE_URL: DB_URL }));
     await cleanup();
 
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(PrismaService)
-      .useValue(prisma)
-      .overrideProvider(RedisService)
-      .useValue(new FakeRedis())
-      .overrideProvider(StorageService)
-      .useValue(new FakeStorage())
-      .overrideProvider(OTP_SENDER)
-      .useValue({
-        send: (m: OtpMessage) => {
-          outbox.push(m);
-          return Promise.resolve();
-        },
-      })
-      .compile();
-    app = moduleRef.createNestApplication();
-    configureApp(app);
-    await app.init();
+    t = await createTestApp({ prisma });
+    app = t.app;
 
     await seed('superadmin', 'super_admin', 'Root Admin');
     await seed('admin', 'admin', 'Ada Admin');
@@ -345,9 +321,21 @@ describe.skipIf(!DB_URL)('Admin portal (e2e)', () => {
     // No password yet → can't log in.
     expect((await login(email)).res.status).toBe(401);
 
-    const code = outbox
-      .filter((m) => m.email === email && m.purpose === 'reset_password')
-      .pop()!.code;
+    // The invite goes out as a templated email and is logged as sent.
+    const code = await t.lastCode(email);
+    const invite = t.transport.sent.find((m) => m.to === email)!;
+    expect(invite.subject).toBe(
+      'You’ve been invited to InterviewPrep as Editor',
+    );
+    expect(invite.html).toContain('<strong>Editor</strong>');
+    const record = await prisma.mailMessage.findFirst({
+      where: { toAddress: email },
+    });
+    expect(record).toMatchObject({
+      template: 'staff_invite',
+      status: 'sent',
+      attempts: 1,
+    });
     await http()
       .post('/api/v1/auth/reset-password')
       .send({ email, code, newPassword: 'editor-pass1' })

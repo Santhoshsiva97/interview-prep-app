@@ -68,11 +68,17 @@ model User {
   updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt           DateTime?  @map("deleted_at") @db.Timestamptz(6)
 
-  refreshTokens  RefreshToken[]
-  profile        UserProfile?
-  mailMessages   MailMessage[]
-  suspendedBy    User?          @relation("UserSuspensions", fields: [suspendedById], references: [id], onDelete: SetNull)
-  suspendedUsers User[]         @relation("UserSuspensions")
+  refreshTokens RefreshToken[]
+  profile       UserProfile?
+  mailMessages  MailMessage[]
+
+  authoredQuestions  Question[]        @relation("QuestionAuthor")
+  submittedQuestions Question[]        @relation("QuestionSubmitter")
+  reviewedQuestions  Question[]        @relation("QuestionReviewer")
+  questionVersions   QuestionVersion[]
+  questionImports    QuestionImport[]
+  suspendedBy        User?             @relation("UserSuspensions", fields: [suspendedById], references: [id], onDelete: SetNull)
+  suspendedUsers     User[]            @relation("UserSuspensions")
 
   @@index([role])
   @@index([status])
@@ -172,4 +178,185 @@ model MailMessage {
   @@index([userId])
   @@index([createdAt])
   @@map("mail_messages")
+}
+
+// ─────────────────────────────── Question Bank ────────────────────────────────
+// FRD §4.11. Built ahead of Step 1: reconcile with the Database Module Design Document.
+
+enum QuestionType {
+  mcq
+  coding
+
+  @@map("question_type")
+}
+
+/// Review state of the question's current version. A question can be
+/// `draft` while an older version is still live (published_version_id).
+enum QuestionStatus {
+  draft
+  pending_review
+  published
+  rejected
+  archived
+
+  @@map("question_status")
+}
+
+enum Difficulty {
+  easy
+  medium
+  hard
+
+  @@map("difficulty")
+}
+
+enum TagKind {
+  skill
+  company
+
+  @@map("tag_kind")
+}
+
+model Topic {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String    @db.VarChar(80)
+  slug        String    @unique @db.VarChar(80)
+  description String?   @db.VarChar(500)
+  sortOrder   Int       @default(0) @map("sort_order")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  questions Question[]
+  versions  QuestionVersion[]
+
+  @@map("topics")
+}
+
+model Tag {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String    @db.VarChar(60)
+  slug      String    @unique @db.VarChar(60)
+  kind      TagKind   @default(skill)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  questions QuestionTag[]
+
+  @@index([kind])
+  @@map("tags")
+}
+
+/// Stable identity of a question. Content lives in immutable question_versions
+/// rows; title/topic/difficulty are mirrored from the current version for
+/// listing and filtering.
+model Question {
+  id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type               QuestionType
+  status             QuestionStatus @default(draft)
+  /// Source identifier from bulk import (e.g. the Content Acquisition Tool); re-imports update in place.
+  externalId         String?        @unique @map("external_id") @db.VarChar(120)
+  title              String         @db.VarChar(200)
+  topicId            String         @map("topic_id") @db.Uuid
+  difficulty         Difficulty
+  /// Latest version (what editors work on).
+  currentVersionId   String?        @unique @map("current_version_id") @db.Uuid
+  /// Version candidates see; set when an admin approves. Null = never published / archived.
+  publishedVersionId String?        @unique @map("published_version_id") @db.Uuid
+  authorId           String?        @map("author_id") @db.Uuid
+  submittedAt        DateTime?      @map("submitted_at") @db.Timestamptz(6)
+  submittedById      String?        @map("submitted_by_id") @db.Uuid
+  reviewedAt         DateTime?      @map("reviewed_at") @db.Timestamptz(6)
+  reviewedById       String?        @map("reviewed_by_id") @db.Uuid
+  reviewNote         String?        @map("review_note") @db.VarChar(1000)
+  publishedAt        DateTime?      @map("published_at") @db.Timestamptz(6)
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt          DateTime?      @map("deleted_at") @db.Timestamptz(6)
+
+  topic            Topic             @relation(fields: [topicId], references: [id])
+  currentVersion   QuestionVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  publishedVersion QuestionVersion?  @relation("PublishedVersion", fields: [publishedVersionId], references: [id])
+  versions         QuestionVersion[] @relation("QuestionVersions")
+  tags             QuestionTag[]
+  author           User?             @relation("QuestionAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  submittedBy      User?             @relation("QuestionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  reviewedBy       User?             @relation("QuestionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([type])
+  @@index([topicId])
+  @@index([difficulty])
+  @@index([createdAt])
+  @@map("questions")
+}
+
+/// Immutable snapshot of a question's content. Every edit adds a row.
+model QuestionVersion {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  questionId    String     @map("question_id") @db.Uuid
+  versionNumber Int        @map("version_number")
+  title         String     @db.VarChar(200)
+  /// Markdown.
+  body          String     @db.Text
+  difficulty    Difficulty
+  topicId       String     @map("topic_id") @db.Uuid
+  explanation   String?    @db.Text
+  marks         Int        @default(1)
+  /// Type-specific payload: { mcq: { options, allowMultiple } } or
+  /// { coding: { timeLimitMs, memoryLimitMb, starterCode, testCases } }.
+  content       Json
+  changeNote    String?    @map("change_note") @db.VarChar(500)
+  createdById   String?    @map("created_by_id") @db.Uuid
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  question    Question  @relation("QuestionVersions", fields: [questionId], references: [id], onDelete: Cascade)
+  topic       Topic     @relation(fields: [topicId], references: [id])
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  currentOf   Question? @relation("CurrentVersion")
+  publishedOf Question? @relation("PublishedVersion")
+
+  @@unique([questionId, versionNumber])
+  @@map("question_versions")
+}
+
+/// Link table with a composite key (deviation from the all-UUID-PK
+/// convention, as is standard for pure join tables).
+model QuestionTag {
+  questionId String   @map("question_id") @db.Uuid
+  tagId      String   @map("tag_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, tagId])
+  @@index([tagId])
+  @@map("question_tags")
+}
+
+/// History of bulk uploads (dry runs are not stored).
+model QuestionImport {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  uploadedById   String?   @map("uploaded_by_id") @db.Uuid
+  fileName       String    @map("file_name") @db.VarChar(255)
+  format         String    @db.VarChar(10)
+  totalRows      Int       @map("total_rows")
+  createdCount   Int       @map("created_count")
+  updatedCount   Int       @map("updated_count")
+  unchangedCount Int       @map("unchanged_count")
+  errorCount     Int       @map("error_count")
+  /// Per-row problems: [{ row, externalId?, errors: [{ field, message }] }].
+  errors         Json
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("question_imports")
 }

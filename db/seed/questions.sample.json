@@ -1,0 +1,280 @@
+{
+  "topics": [
+    { "slug": "arrays-and-hashing", "name": "Arrays & Hashing", "description": "Arrays, hash maps and sets", "sortOrder": 10 },
+    { "slug": "strings", "name": "Strings", "description": "String manipulation and parsing", "sortOrder": 20 },
+    { "slug": "linked-lists", "name": "Linked Lists", "description": "Singly and doubly linked lists", "sortOrder": 30 },
+    { "slug": "trees-and-graphs", "name": "Trees & Graphs", "description": "Traversals, BSTs, BFS/DFS", "sortOrder": 40 },
+    { "slug": "dynamic-programming", "name": "Dynamic Programming", "description": "Memoisation and tabulation", "sortOrder": 50 },
+    { "slug": "sql-and-databases", "name": "SQL & Databases", "description": "Queries, joins, indexing, transactions", "sortOrder": 60 },
+    { "slug": "operating-systems", "name": "Operating Systems", "description": "Processes, threads, memory, scheduling", "sortOrder": 70 },
+    { "slug": "computer-networks", "name": "Computer Networks", "description": "TCP/IP, HTTP, DNS", "sortOrder": 80 },
+    { "slug": "system-design", "name": "System Design", "description": "Scalability, caching, trade-offs", "sortOrder": 90 },
+    { "slug": "javascript", "name": "JavaScript", "description": "Language fundamentals", "sortOrder": 100 }
+  ],
+  "tags": [
+    { "slug": "binary-search", "name": "Binary Search" },
+    { "slug": "hashing", "name": "Hashing" },
+    { "slug": "two-pointers", "name": "Two Pointers" },
+    { "slug": "stack", "name": "Stack" },
+    { "slug": "recursion", "name": "Recursion" },
+    { "slug": "tree-traversal", "name": "Tree Traversal" },
+    { "slug": "joins", "name": "Joins" },
+    { "slug": "concurrency", "name": "Concurrency" },
+    { "slug": "http", "name": "HTTP" },
+    { "slug": "kadane", "name": "Kadane's Algorithm" },
+    { "slug": "amazon", "name": "Amazon", "kind": "company" },
+    { "slug": "google", "name": "Google", "kind": "company" },
+    { "slug": "microsoft", "name": "Microsoft", "kind": "company" },
+    { "slug": "flipkart", "name": "Flipkart", "kind": "company" },
+    { "slug": "infosys", "name": "Infosys", "kind": "company" },
+    { "slug": "tcs", "name": "TCS", "kind": "company" }
+  ],
+  "questions": [
+    {
+      "externalId": "seed-mcq-001",
+      "type": "mcq",
+      "title": "Time complexity of binary search",
+      "body": "What is the worst-case time complexity of binary search on a **sorted** array of *n* elements?",
+      "topic": "arrays-and-hashing",
+      "difficulty": "easy",
+      "tags": ["binary-search", "company:Amazon"],
+      "explanation": "Each comparison halves the remaining range, so at most ⌊log₂ n⌋ + 1 comparisons are needed.",
+      "marks": 1,
+      "mcq": {
+        "allowMultiple": false,
+        "options": [
+          { "text": "O(1)", "isCorrect": false },
+          { "text": "O(log n)", "isCorrect": true },
+          { "text": "O(n)", "isCorrect": false },
+          { "text": "O(n log n)", "isCorrect": false }
+        ]
+      }
+    },
+    {
+      "externalId": "seed-mcq-002",
+      "type": "mcq",
+      "title": "Average lookup cost in a hash map",
+      "body": "Assuming a good hash function and a bounded load factor, what is the **average** time to look up a key in a hash map?",
+      "topic": "arrays-and-hashing",
+      "difficulty": "easy",
+      "tags": ["hashing", "company:TCS"],
+      "explanation": "With keys spread evenly across buckets, each bucket holds O(1) entries on average. The worst case degrades to O(n) when many keys collide.",
+      "mcq": {
+        "allowMultiple": false,
+        "options": [
+          { "text": "O(1)", "isCorrect": true },
+          { "text": "O(log n)", "isCorrect": false },
+          { "text": "O(n)", "isCorrect": false },
+          { "text": "O(n²)", "isCorrect": false }
+        ]
+      }
+    },
+    {
+      "externalId": "seed-mcq-003",
+      "type": "mcq",
+      "title": "Detecting a cycle with constant extra space",
+      "body": "Which technique detects a cycle in a singly linked list using **O(1)** extra memory?",
+      "topic": "linked-lists",
+      "difficulty": "medium",
+      "tags": ["two-pointers", "company:Microsoft"],
+      "explanation": "Floyd's algorithm moves a slow pointer one step and a fast pointer two steps; they meet if and only if there is a cycle.",
+      "mcq": {
+        "allowMultiple": false,
+        "options": [
+          { "text": "Store visited nodes in a hash set", "isCorrect": false },
+          { "text": "Fast and slow pointers (Floyd's cycle detection)", "isCorrect": true },
+          { "text": "Reverse the list and compare with the original", "isCorrect": false },
+          { "text": "Sort the node addresses and look for duplicates", "isCorrect": false }
+        ]
+      }
+    },
+    {
+      "externalId": "seed-mcq-004",
+      "type": "mcq",
+      "title": "Traversal that lists a BST in sorted order",
+      "body": "Which depth-first traversal of a **binary search tree** visits its keys in ascending order?",
+      "topic": "trees-and-graphs",
+      "difficulty": "easy",
+      "tags": ["tree-traversal", "company:Infosys"],
+      "explanation": "In-order traversal visits the left subtree, then the node, then the right subtree, which is exactly ascending order for a BST.",
+      "mcq": {
+        "allowMultiple": false,
+        "options": [
+          { "text": "Pre-order", "isCorrect": false },
+          { "text": "In-order", "isCorrect": true },
+          { "text": "Post-order", "isCorrect": false },
+          { "text": "Level-order", "isCorrect": false }
+        ]
+      }
+    },
+    {
+      "externalId": "seed-mcq-005",
+      "type": "mcq",
+      "title": "When dynamic programming applies",
+      "body": "Which properties make a problem a good fit for dynamic programming? **Select all that apply.**",
+      "topic": "dynamic-programming",
+      "difficulty": "medium",
+      "tags": ["recursion", "company:Google"],
+      "explanation": "DP needs optimal substructure (optimal answers built from optimal sub-answers) and overlapping subproblems (the same subproblems recur, so caching pays off).",
+      "marks": 2,
+      "mcq": {
+        "allowMultiple": true,
+        "options": [
+          { "text": "Optimal substructure", "isCorrect": true },
+          { "text": "Overlapping subproblems", "isCorrect": true },
+          { "text": "The input is already sorted", "isCorrect": false },
+          { "text": "A greedy choice is always safe", "isCorrect": false }
+        ]
+      }
+    },
+    {
+      "externalId": "seed-mcq-006",
+      "type": "mcq",
+      "title": "JOIN that keeps only matching rows",
+      "body": "Which SQL join returns **only** the rows that have matching values in both tables?",
+      "topic": "sql-and-databases",
+      "difficulty": "easy",
+      "tags": ["joins", "company:Flipkart"],
+      "explanation": "INNER JOIN keeps only matched pairs. LEFT/RIGHT/FULL OUTER joins also keep unmatched rows from one or both sides, filled with NULLs.",
+      "mcq": {
+        "allowMultiple": false,
+        "options": [
+          { "text": "INNER JOIN", "isCorrect": true },
+          { "text": "LEFT OUTER JOIN", "isCorrect": false },
+          { "text": "FULL OUTER JOIN", "isCorrect": false },
+          { "text": "CROSS JOIN", "isCorrect": false }
+        ]
+      }
+    },
+    {
+      "externalId": "seed-mcq-007",
+      "type": "mcq",
+      "title": "Which is not a deadlock condition?",
+      "body": "Deadlock can only occur when four conditions hold at once. Which of these is **not** one of them?",
+      "topic": "operating-systems",
+      "difficulty": "medium",
+      "tags": ["concurrency"],
+      "explanation": "The four (Coffman) conditions are mutual exclusion, hold and wait, no preemption and circular wait. Preemptive scheduling is unrelated.",
+      "mcq": {
+        "allowMultiple": false,
+        "options": [
+          { "text": "Mutual exclusion", "isCorrect": false },
+          { "text": "Hold and wait", "isCorrect": false },
+          { "text": "Preemptive CPU scheduling", "isCorrect": true },
+          { "text": "Circular wait", "isCorrect": false }
+        ]
+      }
+    },
+    {
+      "externalId": "seed-mcq-008",
+      "type": "mcq",
+      "title": "Meaning of HTTP 404",
+      "body": "A server responds to a request with status code **404**. What does it mean?",
+      "topic": "computer-networks",
+      "difficulty": "easy",
+      "tags": ["http"],
+      "explanation": "404 Not Found means the server has no resource at that URL. 401/403 concern authentication/authorisation, and 5xx codes are server errors.",
+      "mcq": {
+        "allowMultiple": false,
+        "options": [
+          { "text": "The resource was not found", "isCorrect": true },
+          { "text": "The request is not authenticated", "isCorrect": false },
+          { "text": "The server crashed while handling the request", "isCorrect": false },
+          { "text": "The resource moved permanently", "isCorrect": false }
+        ]
+      }
+    },
+    {
+      "externalId": "seed-code-001",
+      "type": "coding",
+      "title": "Pair with target sum",
+      "body": "Given an array of integers and a target, print the **0-based indices** of the two numbers that add up to the target (smaller index first). Exactly one answer exists.\n\n**Input**\n- Line 1: `n` and `target`\n- Line 2: `n` space-separated integers\n\n**Output**\n- Two indices separated by a space",
+      "topic": "arrays-and-hashing",
+      "difficulty": "easy",
+      "tags": ["hashing", "company:Amazon", "company:Google"],
+      "explanation": "Scan once, storing each value's index in a hash map; for each element check whether `target - value` was seen. O(n) time, O(n) space.",
+      "marks": 10,
+      "coding": {
+        "timeLimitMs": 2000,
+        "memoryLimitMb": 256,
+        "starterCode": {
+          "python": "n, target = map(int, input().split())\nnums = list(map(int, input().split()))\n# print the two indices\n",
+          "javascript": "const lines = require('fs').readFileSync(0, 'utf8').trim().split('\\n');\nconst [n, target] = lines[0].split(' ').map(Number);\nconst nums = lines[1].split(' ').map(Number);\n// print the two indices\n"
+        },
+        "testCases": [
+          { "input": "4 9\n2 7 11 15\n", "expectedOutput": "0 1", "isSample": true },
+          { "input": "3 6\n3 2 4\n", "expectedOutput": "1 2", "isSample": true },
+          { "input": "5 -8\n-1 -3 -5 4 -3\n", "expectedOutput": "2 4", "isSample": false, "weight": 2 },
+          { "input": "2 0\n0 0\n", "expectedOutput": "0 1", "isSample": false }
+        ]
+      }
+    },
+    {
+      "externalId": "seed-code-002",
+      "type": "coding",
+      "title": "Balanced brackets",
+      "body": "A string contains only the characters `()[]{}`. Print `true` if every bracket is closed by the same type in the correct order, otherwise `false`.\n\n**Input**: one line containing the string (may be empty).",
+      "topic": "strings",
+      "difficulty": "easy",
+      "tags": ["stack", "company:Microsoft"],
+      "explanation": "Push opening brackets on a stack; on a closing bracket the top must be its partner. The string is balanced if the stack ends empty.",
+      "marks": 10,
+      "coding": {
+        "timeLimitMs": 1000,
+        "memoryLimitMb": 128,
+        "starterCode": { "python": "s = input().strip()\n# print true or false\n" },
+        "testCases": [
+          { "input": "()[]{}\n", "expectedOutput": "true", "isSample": true },
+          { "input": "(]\n", "expectedOutput": "false", "isSample": true },
+          { "input": "([{}])\n", "expectedOutput": "true", "isSample": false },
+          { "input": "((\n", "expectedOutput": "false", "isSample": false },
+          { "input": "\n", "expectedOutput": "true", "isSample": false }
+        ]
+      }
+    },
+    {
+      "externalId": "seed-code-003",
+      "type": "coding",
+      "title": "Ways to climb a staircase",
+      "body": "You can climb 1 or 2 steps at a time. Print the number of distinct ways to reach the top of a staircase with `n` steps (1 ≤ n ≤ 45).",
+      "topic": "dynamic-programming",
+      "difficulty": "easy",
+      "tags": ["recursion"],
+      "explanation": "ways(n) = ways(n-1) + ways(n-2) with ways(1)=1, ways(2)=2: a Fibonacci recurrence solved bottom-up in O(n).",
+      "marks": 10,
+      "coding": {
+        "timeLimitMs": 1000,
+        "memoryLimitMb": 128,
+        "starterCode": { "python": "n = int(input())\n# print the number of ways\n" },
+        "testCases": [
+          { "input": "2\n", "expectedOutput": "2", "isSample": true },
+          { "input": "3\n", "expectedOutput": "3", "isSample": true },
+          { "input": "10\n", "expectedOutput": "89", "isSample": false },
+          { "input": "45\n", "expectedOutput": "1836311903", "isSample": false, "weight": 2 }
+        ]
+      }
+    },
+    {
+      "externalId": "seed-code-004",
+      "type": "coding",
+      "title": "Maximum subarray sum",
+      "body": "Print the largest sum of any **non-empty contiguous** subarray.\n\n**Input**\n- Line 1: `n`\n- Line 2: `n` space-separated integers",
+      "topic": "arrays-and-hashing",
+      "difficulty": "medium",
+      "tags": ["kadane", "company:Microsoft", "company:Flipkart"],
+      "explanation": "Kadane's algorithm: keep the best sum ending at the current index (max(x, best + x)) and the best seen overall. O(n) time, O(1) space.",
+      "marks": 15,
+      "coding": {
+        "timeLimitMs": 2000,
+        "memoryLimitMb": 256,
+        "starterCode": { "python": "n = int(input())\nnums = list(map(int, input().split()))\n# print the maximum subarray sum\n" },
+        "testCases": [
+          { "input": "9\n-2 1 -3 4 -1 2 1 -5 4\n", "expectedOutput": "6", "isSample": true },
+          { "input": "1\n-7\n", "expectedOutput": "-7", "isSample": true },
+          { "input": "5\n5 4 -1 7 8\n", "expectedOutput": "23", "isSample": false },
+          { "input": "4\n-3 -1 -4 -2\n", "expectedOutput": "-1", "isSample": false, "weight": 2 }
+        ]
+      }
+    }
+  ]
+}

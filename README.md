@@ -91,6 +91,10 @@ and `APP_BASE_URL` to the public web URL used in email links. Staff can check de
 
 ### Dev notes
 
+- **Sample data:** `npm --prefix backend run build && npm --prefix backend run seed:dev` loads 10 topics,
+  16 tags and 12 published questions (8 MCQ, 4 coding) from `db/seed/questions.sample.json`. Safe to re-run.
+  In Docker: `docker compose exec backend npm run seed:dev`.
+- **Bulk question upload format:** see [docs/question-import-format.md](docs/question-import-format.md).
 - **First super admin:** sign up and verify an account, then run
   `npm --prefix backend run build && npm --prefix backend run admin:promote -- you@example.com`
   (in Docker: `docker compose exec backend npm run admin:promote -- you@example.com`). Log in

@@ -107,6 +107,24 @@ users, the question bank, exams, payments, and ads.
 - Tests: `test/utils/test-app.ts` `createTestApp()` boots AppModule with Redis, S3, the mail queue and SMTP
   faked; `t.lastCode(email)` runs the real MailProcessor and returns the code from the rendered email
 
+### Question bank (Step 6)
+- `questions` is the stable identity; content lives in **immutable** `question_versions` rows. Every
+  edit (UI or re-import) adds a version via `QuestionService.update()`, and identical content adds none
+  (compared with `contentFingerprint`, key-order independent). `current_version_id` = latest,
+  `published_version_id` = what candidates see. **Serve candidates from `publishedVersion`, never
+  `currentVersion`.** Title/topic/difficulty on `questions` mirror the current version for listing
+- Workflow: `draft → pending_review → published | rejected`, `archived ↔ draft`. Editors submit/withdraw;
+  admins approve/reject/archive/restore. Editing a published question makes it `draft` again while the
+  old version stays live
+- Version `content` JSON: `{ mcq: { options: [{ id, text, isCorrect }], allowMultiple } }` or
+  `{ coding: { timeLimitMs, memoryLimitMb, starterCode: { python|javascript|java|cpp }, testCases: [{ input, expectedOutput, isSample, weight }] } }`.
+  MCQ option `id`s are stable across versions: reference them in answer keys (Step 7/8)
+- Validation lives in one place for both UI and import: DTOs in `question-input.dto.ts` + cross-field
+  `contentProblems()` in `question-content.ts`
+- Bulk import format is a public contract: **`docs/question-import-format.md`**. Change it only compatibly
+- Dev data: `npm --prefix backend run build && npm --prefix backend run seed:dev` (idempotent; loads
+  `db/seed/questions.sample.json`: 10 topics, 16 tags, 12 published questions)
+
 ### Frontend (React)
 - Routes are declared in `src/app/router.tsx`; unbuilt routes use `<ComingSoonPage title description>`
 - Three layouts: `AppLayout` (public site + auth screens), `PortalLayout` (candidate portal) and
@@ -141,7 +159,9 @@ users, the question bank, exams, payments, and ads.
   src/pages/                   route-level pages (Home, ComingSoon, NotFound, Error)
   src/pages/auth/              Signup, VerifyEmail, Login, ForgotPassword
   src/pages/portal/            Dashboard, Profile
-  src/pages/admin/             AdminDashboard, AdminUsers, AdminUserDetail, AdminStaff, AdminEmail
+  src/pages/admin/             AdminDashboard, AdminUsers, AdminUserDetail, AdminStaff, AdminEmail, Taxonomy
+  src/pages/admin/questions/   QuestionsList, QuestionEditor (MCQ + coding, workflow, history), QuestionImport
+  src/features/questions/      question-bank API client/types, editor form model, badges
   src/features/admin/          admin API client + types, role/status badges
   src/features/auth/           AuthProvider/useAuth, RequireAuth, auth API client, AuthCard
   src/features/profile/        ProfileProvider/useProfile, profile API, Avatar, ProfileMenu
@@ -158,7 +178,6 @@ users, the question bank, exams, payments, and ads.
   src/modules/<feature>/       controllers/ services/ models/ + <feature>.module.ts
   src/common/errors/           AppError (coded HTTP errors)
   src/common/auth/             SessionRevocationService (immediate access-token revocation)
-  src/cli/                     one-off scripts (promote-super-admin)
   src/storage/                 StorageService (S3-compatible, presigned URLs)
   src/modules/auth/            registration, OTP, login, tokens, password reset
   src/modules/profile/         /me/profile, /me/avatar, /me/resume (+ upload rules)
@@ -167,12 +186,17 @@ users, the question bank, exams, payments, and ads.
   src/modules/mail/            MailService (enqueue), MailProcessor (worker), templates/, transport,
                                EmailOtpSender, /admin/mail (delivery log + previews)
   src/queue/                   QueueModule (shared BullMQ connection)
+  src/modules/question-bank/   questions/versions/workflow, taxonomy (topics, tags), bulk import
+  src/cli/                     promote-super-admin, seed-dev
   src/generated/prisma/        generated Prisma client (gitignored)
   test/                        e2e tests + test/utils (createTestApp, FakeRedis, FakeStorage, FakeQueue, CapturingTransport, fakeConfig)
 /db                            Prisma package (CLI + config)
   schema.prisma                data model
   prisma.config.ts             reads DATABASE_URL (env or ../backend/.env)
   migrations/                  SQL migrations
+  seed/questions.sample.json   dev seed (also a valid bulk-import file)
+/docs
+  question-import-format.md    bulk-upload contract (Content Acquisition Tool)
 docker-compose.yml             postgres, redis, minio, mailpit, backend, frontend
 README.md                      setup instructions
 PROJECT_CONTEXT.md             ← this file

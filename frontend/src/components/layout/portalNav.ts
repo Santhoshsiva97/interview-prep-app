@@ -59,6 +59,18 @@ export const ADMIN_NAV: NavItem[] = [
     roles: ['super_admin'],
   },
   {
+    to: '/admin/questions',
+    label: 'Questions',
+    icon: 'practice',
+    roles: ['editor', 'admin'],
+  },
+  {
+    to: '/admin/taxonomy',
+    label: 'Taxonomy',
+    icon: 'bookmark',
+    roles: ['editor', 'admin'],
+  },
+  {
     to: '/admin/email',
     label: 'Email',
     icon: 'mail',
@@ -67,7 +79,7 @@ export const ADMIN_NAV: NavItem[] = [
   {
     to: '/admin/exams',
     label: 'Exam Builder',
-    icon: 'practice',
+    icon: 'history',
     soon: true,
     roles: ['admin', 'editor'],
   },

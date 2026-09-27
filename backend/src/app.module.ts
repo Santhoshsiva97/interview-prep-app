@@ -13,6 +13,7 @@ import { HealthModule } from './modules/health/health.module.js';
 import { MailWorkerModule } from './modules/mail/mail-worker.module.js';
 import { MailModule } from './modules/mail/mail.module.js';
 import { ProfileModule } from './modules/profile/profile.module.js';
+import { QuestionBankModule } from './modules/question-bank/question-bank.module.js';
 import { QueueModule } from './queue/queue.module.js';
 import { StorageModule } from './storage/storage.module.js';
 
@@ -39,6 +40,7 @@ import { StorageModule } from './storage/storage.module.js';
     ProfileModule,
     DashboardModule,
     AdminModule,
+    QuestionBankModule,
   ],
   providers: [
     // Order matters: authenticate first, then check roles.

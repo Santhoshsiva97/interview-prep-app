@@ -7,6 +7,10 @@ import { AdminEmailPage } from '../pages/admin/AdminEmailPage';
 import { AdminStaffPage } from '../pages/admin/AdminStaffPage';
 import { AdminUserDetailPage } from '../pages/admin/AdminUserDetailPage';
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
+import { QuestionEditorPage } from '../pages/admin/questions/QuestionEditorPage';
+import { QuestionImportPage } from '../pages/admin/questions/QuestionImportPage';
+import { QuestionsListPage } from '../pages/admin/questions/QuestionsListPage';
+import { TaxonomyPage } from '../pages/admin/TaxonomyPage';
 import { PortalLayout } from '../components/layout/PortalLayout';
 import { ForgotPasswordPage } from '../pages/auth/ForgotPasswordPage';
 import { LoginPage } from '../pages/auth/LoginPage';
@@ -81,6 +85,47 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth roles={['admin', 'support']}>
             <AdminEmailPage />
+          </RequireAuth>
+        ),
+      },
+      // Question bank (Step 6)
+      {
+        path: 'questions',
+        element: (
+          <RequireAuth roles={['editor', 'admin']}>
+            <QuestionsListPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'questions/new',
+        element: (
+          <RequireAuth roles={['editor', 'admin']}>
+            <QuestionEditorPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'questions/import',
+        element: (
+          <RequireAuth roles={['editor', 'admin']}>
+            <QuestionImportPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'questions/:id',
+        element: (
+          <RequireAuth roles={['editor', 'admin']}>
+            <QuestionEditorPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'taxonomy',
+        element: (
+          <RequireAuth roles={['editor', 'admin']}>
+            <TaxonomyPage />
           </RequireAuth>
         ),
       },

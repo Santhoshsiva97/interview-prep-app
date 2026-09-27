@@ -378,3 +378,75 @@ container sends real SMTP to it. Without Docker, `MAIL_TRANSPORT=log` prints eac
 - Step 7: wire `exam_reminder` (scheduled BullMQ job, e.g. `delay` until 30 min before start).
 - Step 15 (notifications) can reuse the `QueueModule` pattern for its own queue.
 - A "resend" action for failed mails in Admin → Email would be easy to add (re-enqueue a new record).
+
+---
+
+## 2026-09-28 — Step 6: Question Bank & Question Set Upload (FRD §4.11) ✅
+
+Branch `step-6-question-bank` (from `main` @ Step 5). The FRD wasn't attached, so code cites "FRD §4.11"
+rather than FR-11.x numbers. **Step 1 is still outstanding**, so this step added the question-bank tables itself
+(migration `20260928090000_question_bank`): `topics`, `tags` (kind `skill|company`), `questions`,
+`question_versions`, `question_tags`, `question_imports` + enums `question_type`, `question_status`,
+`difficulty`, `tag_kind`. Step 1 should reconcile them with the Database Module Design Document.
+
+**Bulk-upload file format (for the Content Acquisition Tool)**. The full spec is in
+**[`docs/question-import-format.md`](docs/question-import-format.md)**. Summary:
+- `POST /api/v1/admin/question-imports` (multipart `file`, editor/admin token), `.json` or `.csv`, UTF-8,
+  ≤ 5 MB, ≤ 1000 questions. Query flags: `dryRun`, `createMissingTaxonomy`, `submitForReview`.
+- **JSON:** `{ "questions": [ { externalId?, type: "mcq"|"coding", title, body (Markdown), topic (slug|name),
+  difficulty: "easy"|"medium"|"hard", tags?: ["slug", "company:Name"], explanation?, marks?,
+  mcq?: { allowMultiple?, options: [{ text, isCorrect }] },
+  coding?: { timeLimitMs?, memoryLimitMb?, starterCode?: { python|javascript|java|cpp: "…" },
+  testCases: [{ input, expectedOutput, isSample?, weight? }] } } ] }` (a bare array also works).
+- **CSV:** header row, columns `external_id,type,title,body,topic,difficulty,tags(pipe-separated),explanation,marks,
+  option_1…option_8,correct("2" or "1,3"),allow_multiple,time_limit_ms,memory_limit_mb,starter_code(JSON),test_cases(JSON)`.
+- **Semantics:** each row is validated separately (valid rows import, invalid ones are reported with `{ row, field, message }`).
+  Re-importing the same `externalId` updates that question in place: unchanged content is a no-op, changed content
+  becomes a new version, back to draft/review, and the old version stays live until approved. Imports never publish
+  directly. Response: `{ created, updated, unchanged, failed, rows[], newTaxonomy }`.
+- Templates: `GET /api/v1/admin/question-imports/template?format=json|csv`. `db/seed/questions.sample.json`
+  is itself a valid import file.
+
+**Sample questions in dev data: 12** (8 MCQ + 4 coding, all published, 1 version each) across 10 topics and 16 tags
+(10 skill, 6 company), loaded by `npm --prefix backend run seed:dev` (idempotent; re-running reports
+"12 unchanged"). My local DB currently has 14, because 2 more were created while testing the UI (a JavaScript MCQ
+via the editor and one via CSV import).
+
+**What's built**
+| Area | Status |
+|---|---|
+| Manual editor (`/admin/questions/new?type=mcq|coding`, `/admin/questions/:id`) | **Functional**: title, Markdown body, topic, difficulty, marks, skill/company tags, explanation; MCQ options (2–8, single/multiple correct); coding limits, starter code (Python/JS/Java/C++), test cases (sample/hidden, weights). Server-side validation errors listed per field |
+| Versioning | **Functional**: every save adds an immutable `question_versions` row (with change note); no-op saves are skipped; MCQ option ids stay stable across versions. `current_version_id` = latest, `published_version_id` = live. History panel with a read-only version viewer |
+| Approval workflow | **Functional**: draft → pending_review → published / rejected (note required) → fix → resubmit; archive/restore. Editors submit/withdraw, admins approve/reject/archive/restore (API `@Roles` + UI). Editing a published question keeps the old version live |
+| Bulk upload (`/admin/questions/import`) | **Functional**: CSV/JSON, dry-run validation report, import of valid rows, downloadable error-report CSV, template downloads, import history |
+| Taxonomy (`/admin/taxonomy`) | **Functional**: topics (name, slug, description, order, question counts; can't delete while in use) and skill/company tags (deleting detaches them from questions) |
+| Question list (`/admin/questions`) | **Functional**: status tabs with counts (incl. review queue), search (title/external id), type/topic/difficulty filters, pagination |
+
+**API** (`/api/v1/admin`, roles in brackets; super_admin passes all)
+`GET/POST topics`, `PATCH/DELETE topics/:id`, `GET/POST tags`, `PATCH/DELETE tags/:id` [read: editor, admin, support;
+write: editor, admin] · `GET questions`, `GET questions/:id`, `GET questions/:id/versions/:n`, `POST questions`,
+`PUT questions/:id`, `POST questions/:id/submit|withdraw` [editor, admin] · `POST questions/:id/approve|reject|archive|restore`
+[admin] · `POST/GET question-imports`, `GET question-imports/template` [editor, admin].
+Error codes: `INVALID_QUESTION` (+ `errors[]`), `INVALID_TRANSITION`, `QUESTION_ARCHIVED`, `TYPE_IMMUTABLE`,
+`QUESTION_NOT_FOUND`, `VERSION_NOT_FOUND`, `SLUG_TAKEN`, `TOPIC_IN_USE`, `INVALID_IMPORT_FILE`.
+
+**Verified**
+- Backend: typecheck 0 errors, lint, build. 58 unit tests (new: content rules, option ids, key-order-independent fingerprint,
+  CSV/JSON parsing incl. quoting, BOM, JSON cells, limits). 38 e2e tests against real Postgres, including a new question-bank
+  suite (10): RBAC, validation, versioning + option-id stability + no-op saves, the full workflow incl. reject → fix → approve,
+  live version kept while editing, archive/restore, filters/status counts, taxonomy protections, dry run writes nothing,
+  partial import + idempotent re-import + update → v2 + submitForReview, createMissingTaxonomy (company tag), bad files,
+  templates. Suites clean up after themselves.
+- **Found and fixed while testing:** re-importing identical coding questions created spurious versions, because Postgres
+  `jsonb` reorders object keys. The fingerprint now uses a sorted-key stringify, and re-running the seed reports "12 unchanged".
+- Browser (1024px): created an MCQ in the editor → saved v2 with a note → submitted → approved via the dialog (history shows
+  "v2 · current · live"); CSV import dry run (1 valid, 1 invalid with both errors) → import → history; taxonomy page blocks
+  deleting a used topic. Also fixed the editor layout at mid widths (the side panel now stacks under 1200px).
+
+**Notes for next steps**
+- Step 7 (exam builder): select questions via `QuestionService`/`GET /admin/questions?status=published`, and snapshot
+  **`publishedVersionId`** into exams so later edits don't change a running exam. MCQ answer keys = option `id`s.
+- Step 8 (judge): test cases live in `question_versions.content.coding.testCases` (`isSample` = visible). Define the output
+  comparison rules there.
+- Step 19 (search): `questions` has title/topic/difficulty/type/status indexes; add the `search_vector`/GIN index then.
+- Candidate-facing practice (Step 6 placeholder `/practice`) isn't wired yet. It needs a published-only read API.

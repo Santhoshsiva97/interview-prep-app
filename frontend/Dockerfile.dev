@@ -1,0 +1,11 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+EXPOSE 5173
+
+# Source is bind-mounted at runtime (see docker-compose.yml).
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

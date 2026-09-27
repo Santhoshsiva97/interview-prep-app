@@ -1,0 +1,20 @@
+# Development image — build context is the repo root (see docker-compose.yml)
+# because the backend needs /db to generate the Prisma client and run migrations.
+FROM node:24-alpine
+
+# openssl is required by the Prisma schema engine (migrations)
+RUN apk add --no-cache openssl
+
+WORKDIR /app
+
+COPY db/package.json db/package-lock.json ./db/
+RUN npm --prefix db ci
+
+COPY backend/package.json backend/package-lock.json ./backend/
+RUN npm --prefix backend ci
+
+WORKDIR /app/backend
+EXPOSE 3000
+
+# Source is bind-mounted at runtime; generate client, apply migrations, watch.
+CMD ["sh", "-c", "npm --prefix ../db run generate && npm --prefix ../db run migrate:deploy && npm run start:dev"]

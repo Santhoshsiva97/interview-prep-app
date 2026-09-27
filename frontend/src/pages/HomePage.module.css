@@ -1,0 +1,46 @@
+.hero {
+  max-width: 680px;
+  padding: 32px 0;
+}
+
+.hero h1 {
+  margin: 0 0 16px;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+}
+
+.lead {
+  margin: 0 0 24px;
+  font-size: 1.125rem;
+  color: var(--color-text-muted);
+}
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+
+.status[data-status='ok'] .dot {
+  background: var(--color-success);
+}
+
+.status[data-status='degraded'] .dot,
+.status[data-status='unreachable'] .dot {
+  background: var(--color-danger);
+}

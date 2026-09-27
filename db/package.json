@@ -1,0 +1,26 @@
+{
+  "name": "interview-prep-db",
+  "version": "1.0.0",
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:create": "prisma migrate dev --create-only",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:status": "prisma migrate status",
+    "migrate:reset": "prisma migrate reset",
+    "studio": "prisma studio",
+    "format": "prisma format",
+    "validate": "prisma validate"
+  },
+  "type": "module",
+  "devDependencies": {
+    "dotenv": "^18.0.4",
+    "prisma": "7.10.0"
+  },
+  "allowScripts": {
+    "prisma@7.10.0": true,
+    "@prisma/engines@7.10.0": true
+  },
+  "private": true,
+  "description": "Prisma schema + migrations for the Interview Prep Portal"
+}

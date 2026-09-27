@@ -1,0 +1,82 @@
+# Local development stack: postgres, redis, backend (NestJS), frontend (Vite).
+# Usage: docker compose up --build   (see README.md)
+name: interview-prep
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-prep}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prep}
+      POSTGRES_DB: ${POSTGRES_DB:-interview_prep}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.dev
+    env_file:
+      - path: backend/.env
+        required: false
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-prep}:${POSTGRES_PASSWORD:-prep}@postgres:5432/${POSTGRES_DB:-interview_prep}?schema=public
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGINS: http://localhost:5173
+      # Dev-only default; override via JWT_ACCESS_SECRET in the root .env.
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-only-change-me-dev-only-change-me-000}
+      # Poll for file changes — fs events don't cross Windows/macOS bind mounts.
+      TSC_WATCHFILE: DynamicPriorityPolling
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./backend:/app/backend
+      - ./db:/app/db
+      # Keep the container's own node_modules (Linux binaries) — don't mount the host's.
+      - /app/backend/node_modules
+      - /app/db/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      VITE_PROXY_TARGET: http://backend:3000
+      VITE_USE_POLLING: 'true'
+    ports:
+      - '5173:5173'
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  redisdata:

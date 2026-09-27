@@ -1,0 +1,14 @@
+{
+  "name": "interview-prep-local-dev",
+  "private": true,
+  "type": "module",
+  "description": "No-Docker local dev helpers: SMTP catcher with web inbox, read-only DB viewer, backend launcher with in-memory Redis/queue.",
+  "scripts": {
+    "inbox": "node mail-inbox.mjs",
+    "db-viewer": "node db-viewer.cjs"
+  },
+  "dependencies": {
+    "mailparser": "^3.7.1",
+    "smtp-server": "^3.13.0"
+  }
+}

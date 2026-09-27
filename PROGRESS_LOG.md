@@ -450,3 +450,23 @@ Error codes: `INVALID_QUESTION` (+ `errors[]`), `INVALID_TRANSITION`, `QUESTION_
   comparison rules there.
 - Step 19 (search): `questions` has title/topic/difficulty/type/status indexes; add the `search_vector`/GIN index then.
 - Candidate-facing practice (Step 6 placeholder `/practice`) isn't wired yet. It needs a published-only read API.
+
+---
+
+## 2026-09-28 — Session handoff (after Step 6)
+
+**Git:** `main` = Step 5 (`b6816a4`, pushed to GitHub). Step 6 is committed on branch **`step-6-question-bank`**
+(`5434366`), **not merged/pushed yet**. To publish it: `git switch main && git merge --ff-only step-6-question-bank && git push`.
+Uncommitted: this handoff entry and `tools/local-dev/` (no-Docker dev helpers).
+
+**Done:** Steps 0, 2, 3, 4, 5, 6. **Outstanding:** Step 1 (full schema reconciliation + FR tags; the FRD and DB design doc
+were never attached; tables were added per step), then Step 7 (Virtual Interview & Exam Engine) is next in the build order.
+
+**Local environment (this Windows machine has no Docker/Redis):** see `tools/local-dev/README.md`.
+- DB: Prisma local Postgres, server name `interview-prep`, `postgres://postgres:postgres@localhost:51214/template1?sslmode=disable`
+  (every DB name maps to the same database; migrations: use `migrate diff --from-config-datasource` + `migrate:deploy`, see README).
+  All 6 migrations applied; seed loaded (12 sample questions + 2 test ones).
+- E2E tests: `E2E_DATABASE_URL=<url above> npm --prefix backend run test:e2e` (38 passing). Unit: 58 passing. `npm run typecheck` = 0 errors.
+- Dev accounts in the local DB (passwords are in the owner's hands, not recorded here): super admins `sandysanthosh24997@gmail.com`
+  (owner) and `s3check@example.test` (test); editor `divya.editor@example.test`; candidates `nisha.kapoor@example.test` and
+  sample `*@example.test` users (Meera Iyer is suspended as sample data).

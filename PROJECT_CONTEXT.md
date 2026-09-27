@@ -51,6 +51,8 @@ users, the question bank, exams, payments, and ads.
   Read it via `ConfigService<EnvVars, true>` with `{ infer: true }`
 - ESM: relative imports use the `.js` extension (e.g. `./app.module.js`)
 - Shared cross-cutting code goes in `src/common/` (guards, filters, interceptors, decorators)
+- Errors the frontend branches on: throw `AppError(status, 'SOME_CODE', message, details?)`
+  (`src/common/errors/app-error.ts`) → body `{ statusCode, code, message, ...details }`
 - Tests: Vitest — unit specs next to the code (`*.spec.ts`), e2e specs in `backend/test/` (`*.e2e-spec.ts`).
   DB-backed e2e suites run only when `E2E_DATABASE_URL` is set; Redis is faked with `test/utils/fake-redis.ts`
 
@@ -68,8 +70,26 @@ users, the question bank, exams, payments, and ads.
 - Frontend: access token lives in memory only (`src/lib/api.ts`); `apiFetch` refreshes once on 401.
   Use `useAuth()` for the user; wrap protected routes in `<RequireAuth roles={[...]}>`
 
+### Object storage (Step 3)
+- `StorageService` (`src/storage/`, global): `putObject`, `deleteObject`, `getSignedUrl`. The bucket
+  is private. Store only object **keys** in the DB, and return short-lived presigned GET URLs
+  (`S3_PRESIGNED_URL_TTL_SECONDS`, default 1 h). Never return raw bucket URLs.
+- Key layout: `users/<userId>/<kind>/<uuid>.<ext>` (e.g. `avatar`, `resume`)
+- Uploads go through the API as multipart (`FileUploadInterceptor(rules)`, field `file`). Validate
+  type by **magic bytes** (`upload-rules.ts`), never trust the client MIME type, and cap size in
+  the interceptor. When replacing a file, delete the old object (best effort).
+- Local: MinIO in docker-compose (`S3_ENDPOINT=http://minio:9000`, browser URLs signed for
+  `S3_PUBLIC_ENDPOINT=http://localhost:9000`). Prod: AWS S3/R2; omit the endpoint and use an IAM role.
+
 ### Frontend (React)
-- Routes are declared in `src/app/router.tsx`; unbuilt routes use `<ComingSoonPage>`
+- Routes are declared in `src/app/router.tsx`; unbuilt routes use `<ComingSoonPage title description>`
+- Two layouts: `AppLayout` (public site + auth screens) and `PortalLayout` (signed-in client portal:
+  sidebar/drawer nav from `components/layout/portalNav.ts`, top bar with `ProfileMenu`). Portal
+  routes are children of the `PortalLayout` route and are auth-guarded automatically
+- Portal pages read the current user's profile via `useProfile()` (loaded once by `ProfileProvider`);
+  after any `/me/*` call, pass the returned profile to `setProfile()` so the header stays in sync
+- Shared form controls: `components/form/FormField.tsx` (`FormField`, `TextAreaField`, `FormAlert`);
+  icons: `components/icons/Icon.tsx` (inline SVG, no icon library)
 - Feature code goes in `src/features/<feature>/`; route-level pages in `src/pages/`;
   shared UI in `src/components/`
 - All API calls go through `apiFetch` in `src/lib/api.ts` (base `/api/v1`, cookies included)
@@ -83,10 +103,15 @@ users, the question bank, exams, payments, and ads.
 ```
 /frontend                      React + Vite app
   src/app/router.tsx           route table
-  src/components/layout/       AppLayout shell (header/nav/footer)
-  src/pages/                   route-level pages (Home, Account, ComingSoon, NotFound, Error)
+  src/components/layout/       AppLayout (public), PortalLayout + portalNav (client portal)
+  src/components/form/         FormField, TextAreaField, FormAlert
+  src/components/icons/        Icon (inline SVG set)
+  src/pages/                   route-level pages (Home, ComingSoon, NotFound, Error)
   src/pages/auth/              Signup, VerifyEmail, Login, ForgotPassword
-  src/features/auth/           AuthProvider/useAuth, RequireAuth, auth API client, form components
+  src/pages/portal/            Dashboard, Profile
+  src/features/auth/           AuthProvider/useAuth, RequireAuth, auth API client, AuthCard
+  src/features/profile/        ProfileProvider/useProfile, profile API, Avatar, ProfileMenu
+  src/features/dashboard/      dashboard API types
   src/lib/api.ts               fetch wrapper + in-memory access token + single-flight refresh
   src/styles/global.css        design tokens + base styles
 /backend                       NestJS API
@@ -97,14 +122,18 @@ users, the question bank, exams, payments, and ads.
   src/app.setup.ts             shared HTTP pipeline (prefix, versioning, cookies, validation)
   src/common/                  guards (JwtAuth, Roles), decorators (Public, Roles, CurrentUser), types
   src/modules/<feature>/       controllers/ services/ models/ + <feature>.module.ts
+  src/common/errors/           AppError (coded HTTP errors)
+  src/storage/                 StorageService (S3-compatible, presigned URLs)
   src/modules/auth/            registration, OTP, login, tokens, password reset
+  src/modules/profile/         /me/profile, /me/avatar, /me/resume (+ upload rules)
+  src/modules/dashboard/       /dashboard (widget contract)
   src/generated/prisma/        generated Prisma client (gitignored)
   test/                        e2e tests + test/utils (FakeRedis)
 /db                            Prisma package (CLI + config)
   schema.prisma                data model
   prisma.config.ts             reads DATABASE_URL (env or ../backend/.env)
   migrations/                  SQL migrations
-docker-compose.yml             postgres, redis, backend, frontend
+docker-compose.yml             postgres, redis, minio, backend, frontend
 README.md                      setup instructions
 PROJECT_CONTEXT.md             ← this file
 PROGRESS_LOG.md                ← running build log, read this every session

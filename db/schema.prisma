@@ -65,10 +65,38 @@ model User {
   deletedAt           DateTime?  @map("deleted_at") @db.Timestamptz(6)
 
   refreshTokens RefreshToken[]
+  profile       UserProfile?
 
   @@index([role])
   @@index([status])
   @@map("users")
+}
+
+/// Candidate-editable profile details (FRD §4.2), 1:1 with users. Created lazily
+/// on first edit/upload. Files live in S3-compatible storage; only object keys
+/// are stored here.
+model UserProfile {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String    @unique @map("user_id") @db.Uuid
+  headline         String?   @db.VarChar(120)
+  bio              String?   @db.VarChar(1000)
+  location         String?   @db.VarChar(100)
+  targetRole       String?   @map("target_role") @db.VarChar(100)
+  experienceYears  Int?      @map("experience_years") @db.SmallInt
+  linkedinUrl      String?   @map("linkedin_url") @db.VarChar(255)
+  githubUrl        String?   @map("github_url") @db.VarChar(255)
+  avatarKey        String?   @map("avatar_key") @db.VarChar(512)
+  resumeKey        String?   @map("resume_key") @db.VarChar(512)
+  resumeFileName   String?   @map("resume_file_name") @db.VarChar(255)
+  resumeSizeBytes  Int?      @map("resume_size_bytes")
+  resumeUploadedAt DateTime? @map("resume_uploaded_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
 }
 
 /// One row per issued refresh token. Rotation: each use revokes the row and

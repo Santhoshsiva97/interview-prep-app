@@ -87,7 +87,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       credentials: 'include',
       ...init,
       headers: {
-        'Content-Type': 'application/json',
+        // Let the browser set the multipart boundary for FormData bodies.
+        ...(!(init?.body instanceof FormData) && {
+          'Content-Type': 'application/json',
+        }),
         ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
         ...init?.headers,
       },
@@ -125,9 +128,19 @@ export async function apiFetch<T>(
   }
 }
 
-/** JSON POST helper. */
-export const apiPost = <T>(path: string, body?: unknown) =>
-  apiFetch<T>(path, {
-    method: 'POST',
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+const withBody =
+  (method: string) =>
+  <T>(path: string, body?: unknown) =>
+    apiFetch<T>(path, {
+      method,
+      body:
+        body === undefined || body instanceof FormData
+          ? body
+          : JSON.stringify(body),
+    });
+
+/** JSON (or FormData) request helpers. */
+export const apiPost = withBody('POST');
+export const apiPut = withBody('PUT');
+export const apiPatch = withBody('PATCH');
+export const apiDelete = withBody('DELETE');

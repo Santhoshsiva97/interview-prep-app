@@ -7,6 +7,8 @@ export interface AuthContextValue {
   initializing: boolean;
   /** Stores a session returned by login / verify-email. */
   startSession: (session: AuthSession) => void;
+  /** Replaces the cached user (e.g. after a profile edit changes the name). */
+  updateUser: (user: User) => void;
   logout: () => Promise<void>;
 }
 

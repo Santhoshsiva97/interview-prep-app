@@ -128,3 +128,80 @@ keep the column semantics the auth code relies on. The FRD wasn't attached, so c
   (exported from `AuthModule`). Access tokens stay valid until they expire (≤15 min).
 - Step 13 (rate limiting): login/OTP endpoints only have lockout + OTP cooldown so far.
   No per-IP throttling yet.
+
+---
+
+## 2026-09-27 — Step 3: Client Portal Shell (FRD §4.2) ✅
+
+The FRD wasn't attached again, so code cites "FRD §4.2" rather than FR-2.x numbers.
+
+**Page status — what later steps need to wire up**
+| Route | Status | Wired by |
+|---|---|---|
+| `/dashboard` | **Functional** shell. The *Profile strength* widget is live; *Daily streak*, *Recent activity* and *Recommended tests* are placeholders (`status: 'coming_soon'`) | Streak → Step 17 · Activity → Steps 7–9 · Recommendations → Steps 6 + 10 |
+| `/profile` | **Fully functional**: edit details, avatar upload/change/remove, resume upload/replace/remove/download | — |
+| `/practice` | Placeholder (`ComingSoonPage`) | Step 6 (+ Step 19 search/filter) |
+| `/history` | Placeholder | Step 9 (scorecards) |
+| `/bookmarks` | Placeholder | Step 6 (bookmarking questions) |
+| `/subscription` | Placeholder | Step 11 (payments) |
+| `/account` | Redirects to `/profile` (Step 2's temporary page was removed) | — |
+
+To make a placeholder real: replace its `ComingSoonPage` element in `frontend/src/app/router.tsx`
+and drop `soon: true` from its entry in `frontend/src/components/layout/portalNav.ts`.
+To turn on a dashboard widget: return `{ status: 'live', data }` for it from
+`backend/src/modules/dashboard/services/dashboard.service.ts`. The frontend already renders live
+data for every widget (types in `dashboard-response.model.ts`, mirrored in `frontend/src/features/dashboard/api.ts`).
+
+**Backend endpoints** (all require auth)
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/v1/me/profile` | user + profile fields + presigned `avatarUrl` + `resume` {fileName, sizeBytes, uploadedAt, url} + `completeness` {percent, missing[]} |
+| PATCH | `/api/v1/me/profile` | name, phone, headline, bio, location, targetRole, experienceYears (0–50), linkedinUrl/githubUrl (https, host-checked). Omitted = unchanged, blank/null = cleared. Name/phone can't be cleared, email isn't editable |
+| PUT / DELETE | `/api/v1/me/avatar` | multipart `file`: JPEG/PNG/WebP ≤ 2 MB |
+| PUT / DELETE | `/api/v1/me/resume` | multipart `file`: PDF/DOCX/DOC ≤ 5 MB. The original file name is kept for downloads |
+| GET | `/api/v1/dashboard` | `{ user, profileCompleteness, streak, recentActivity, recommendedTests }`, each `{ status, data }` |
+
+Upload errors use the shared coded-error shape: `FILE_REQUIRED` (400), `UNSUPPORTED_FILE_TYPE`
+(400, checked by magic bytes, never the client MIME type), `FILE_TOO_LARGE` (413, enforced while streaming).
+
+**Storage (S3-compatible)**
+- `backend/src/storage/StorageService` (global): private bucket, presigned GET URLs (1 h), a separate
+  signing endpoint for browsers (`S3_PUBLIC_ENDPOINT`), and the bucket is auto-created in dev.
+  Keys: `users/<id>/avatar|resume/<uuid>.<ext>`. The old object is deleted when a file is replaced or removed.
+- docker-compose gains **MinIO** (pinned `RELEASE.2025-04-22T22-12-26Z`, because MinIO stopped
+  publishing community images). Console: http://localhost:9001.
+- New env vars: `S3_ENDPOINT`, `S3_PUBLIC_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
+  `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`, `S3_AUTO_CREATE_BUCKET`, `S3_PRESIGNED_URL_TTL_SECONDS`.
+
+**Schema:** migration `20260927120000_client_portal_profiles` adds `user_profiles` (1:1 with `users`,
+created lazily): headline, bio, location, target_role, experience_years, linkedin_url, github_url,
+avatar_key, resume_key/file_name/size_bytes/uploaded_at + audit columns. Step 1 should reconcile it
+with the design document.
+
+**Frontend structure**
+- `PortalLayout` wraps every portal route in `RequireAuth` + `ProfileProvider`. Sidebar nav on
+  desktop (>900px), an off-canvas drawer with a backdrop on tablet/phone (Escape closes it), and a top bar
+  with `ProfileMenu` (avatar, name, Your profile / Subscription / Log out; closes on Escape or outside click).
+- The public header shows a **Dashboard** button when signed in. Login and verify now land on `/dashboard`.
+- Shared UI: `components/form` (moved from `features/auth/components/FormField`, plus `TextAreaField`),
+  `components/icons/Icon`. Backend `AuthError` now extends the shared `common/errors/AppError`.
+
+**Verified**
+- Backend: lint/build pass. 24 unit tests, including file-type sniffing (disguised SVG/PDF rejected,
+  DOCX needs a `.docx` name) and file-name sanitising. 14 e2e tests against real Postgres: auth
+  (unchanged) plus a new profile/dashboard suite covering update/clear/validation, avatar replace
+  cleanup, bad-file codes, resume name and content type, dashboard contract. E2E files now run
+  sequentially (`fileParallelism: false`) because they share one database.
+- Real S3 protocol, checked against the `s3rver` emulator: signed PUTs, presigned GET returns the same bytes, and the
+  resume downloads with `Content-Disposition: attachment; filename="My CV (final).pdf"`.
+- Browser, at 1024px and 375px: dashboard widgets, profile edit (0 → 100% complete), avatar upload through
+  the real file input updates the page and the top-bar avatar and name, drawer and profile menu, placeholder
+  pages, `/account` redirect, no horizontal overflow, and logging out makes portal routes redirect to login.
+- **Still not verified:** MinIO itself and `docker compose up` (no Docker on this machine).
+
+**Notes for next steps**
+- Step 4 (admin): reuse `PortalLayout`'s pattern with an admin nav, gated by `<RequireAuth roles={['admin', …]}>`
+  on the frontend and `@Roles(...)` on the API.
+- Step 11: `/subscription` placeholder. Step 12 ads must never go on `/profile` form flows or on exam routes.
+- Orphaned objects are possible if a DB write fails after an upload. A periodic sweep can be added
+  with BullMQ later.

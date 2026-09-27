@@ -33,8 +33,8 @@ export function AppLayout() {
           <div className={styles.actions}>
             {initializing ? null : user ? (
               <>
-                <Link to="/account" className={styles.navLink}>
-                  {user.name}
+                <Link to="/dashboard" className="button">
+                  Dashboard
                 </Link>
                 <button
                   type="button"

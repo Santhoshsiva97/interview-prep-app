@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { authApi } from '../../features/auth/api';
 import { AuthCard } from '../../features/auth/components/AuthCard';
 import styles from '../../features/auth/components/AuthForm.module.css';
-import { FormAlert, FormField } from '../../features/auth/components/FormField';
+import { FormAlert, FormField } from '../../components/form/FormField';
 import { useAuth } from '../../features/auth/useAuth';
 import { ApiError, errorMessage } from '../../lib/api';
 
@@ -21,7 +21,7 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  if (user) return <Navigate to={state.from ?? '/account'} replace />;
+  if (user) return <Navigate to={state.from ?? '/dashboard'} replace />;
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -31,7 +31,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       startSession(await authApi.login(email, String(form.get('password'))));
-      navigate(state.from ?? '/account', { replace: true });
+      navigate(state.from ?? '/dashboard', { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED') {
         // A cooldown error just means a code was sent moments ago; it is still valid.

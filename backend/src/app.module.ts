@@ -6,7 +6,10 @@ import { RolesGuard } from './common/guards/roles.guard.js';
 import { envValidationSchema } from './config/env.validation.js';
 import { DatabaseModule } from './database/database.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { ProfileModule } from './modules/profile/profile.module.js';
+import { StorageModule } from './storage/storage.module.js';
 
 @Module({
   imports: [
@@ -18,8 +21,11 @@ import { HealthModule } from './modules/health/health.module.js';
       validationSchema: envValidationSchema,
     }),
     DatabaseModule,
+    StorageModule,
     AuthModule,
     HealthModule,
+    ProfileModule,
+    DashboardModule,
   ],
   providers: [
     // Order matters: authenticate first, then check roles.

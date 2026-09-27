@@ -9,6 +9,7 @@ timed mock exams, virtual interviews, auto-scoring and analytics.
 | Backend API | NestJS (Node.js + TypeScript), served under `/api/v1`    | `backend/`  |
 | Database    | PostgreSQL 17, schema + migrations managed with Prisma 7 | `db/`       |
 | Cache/Queue | Redis 7 (BullMQ added in later modules)                  | —           |
+| Files       | S3-compatible storage (MinIO locally, S3/R2 in prod)     | —           |
 
 See [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for conventions and
 [PROGRESS_LOG.md](PROGRESS_LOG.md) for what has been built so far.
@@ -27,6 +28,7 @@ docker compose up --build
 
 - Frontend: http://localhost:5173
 - API health: http://localhost:3000/api/v1/health
+- MinIO console (uploaded avatars/resumes): http://localhost:9001 (minioadmin / minioadmin)
 
 The backend container generates the Prisma client, applies pending migrations,
 then starts in watch mode. Source folders are bind-mounted, so edits hot-reload.
@@ -38,8 +40,8 @@ Stop with `docker compose down` (add `-v` to wipe the database volume).
 ## Option B — apps on the host, databases in Docker
 
 ```bash
-# 1. Start Postgres + Redis only
-docker compose up -d postgres redis
+# 1. Start Postgres, Redis and MinIO only
+docker compose up -d postgres redis minio
 
 # 2. Database tooling (Prisma CLI) — reads DATABASE_URL from backend/.env
 cp backend/.env.example backend/.env
@@ -79,6 +81,10 @@ npm --prefix frontend run dev         # http://localhost:5173, proxies /api -> :
   `E2E_DATABASE_URL=postgresql://prep:prep@localhost:5432/interview_prep npm --prefix backend run test:e2e`
 - **No Docker?** `npx --prefix db prisma dev` starts a local Prisma Postgres and prints a
   `postgres://` URL you can use for `DATABASE_URL`/`E2E_DATABASE_URL`. You still need Redis to run the API.
+  Caveats: it serves **one** database whatever name you connect to, and its shadow database
+  doesn't reset. If `migrate dev` fails with "already exists", generate the SQL without a shadow DB.
+  From `db/`: `npx prisma migrate diff --from-config-datasource --to-schema schema.prisma --script -o migrations/<timestamp>_<name>/migration.sql`
+  (create the folder first), then `npm run migrate:deploy`.
 
 In Docker, run DB commands inside the backend container, e.g.
 `docker compose exec backend npm --prefix ../db run migrate:dev -- --name add_users`.

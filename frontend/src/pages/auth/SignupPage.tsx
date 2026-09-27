@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { authApi } from '../../features/auth/api';
 import { AuthCard } from '../../features/auth/components/AuthCard';
 import styles from '../../features/auth/components/AuthForm.module.css';
-import { FormAlert, FormField } from '../../features/auth/components/FormField';
+import { FormAlert, FormField } from '../../components/form/FormField';
 import { errorMessage } from '../../lib/api';
 
 export function SignupPage() {

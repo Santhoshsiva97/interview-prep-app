@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { AppError } from '../../../common/errors/app-error.js';
 
 /** Machine-readable codes the frontend can branch on (`body.code`). */
 export type AuthErrorCode =
@@ -15,16 +15,4 @@ export type AuthErrorCode =
   | 'REFRESH_TOKEN_INVALID'
   | 'NOT_IMPLEMENTED';
 
-export class AuthError extends HttpException {
-  readonly code: AuthErrorCode;
-
-  constructor(
-    status: HttpStatus,
-    code: AuthErrorCode,
-    message: string,
-    details: Record<string, unknown> = {},
-  ) {
-    super({ statusCode: status, code, message, ...details }, status);
-    this.code = code;
-  }
-}
+export class AuthError extends AppError<AuthErrorCode> {}

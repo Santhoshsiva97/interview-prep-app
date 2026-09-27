@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { authApi } from '../../features/auth/api';
 import { AuthCard } from '../../features/auth/components/AuthCard';
 import styles from '../../features/auth/components/AuthForm.module.css';
-import { FormAlert, FormField } from '../../features/auth/components/FormField';
+import { FormAlert, FormField } from '../../components/form/FormField';
 import { otpErrorMessage } from '../../features/auth/errors';
 import { useAuth } from '../../features/auth/useAuth';
 import { useCooldown } from '../../features/auth/useCooldown';
@@ -57,7 +57,7 @@ export function VerifyEmailPage() {
     setSubmitting(true);
     try {
       startSession(await authApi.verifyEmail(email, code));
-      navigate('/account', { replace: true });
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(otpErrorMessage(err));
       if (err instanceof ApiError && err.code === 'ALREADY_VERIFIED') {

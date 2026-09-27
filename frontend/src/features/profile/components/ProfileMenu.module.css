@@ -1,0 +1,94 @@
+.root {
+  position: relative;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  border-color: var(--color-border);
+  background: var(--color-bg);
+}
+
+.name {
+  max-width: 160px;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px 10px;
+  font-size: 0.875rem;
+}
+
+.header span {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+}
+
+.menu a,
+.menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.menu a:hover,
+.menu button:hover,
+.menu a:focus-visible,
+.menu button:focus-visible {
+  background: var(--color-bg);
+}
+
+.menu hr {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 520px) {
+  .name {
+    display: none;
+  }
+}

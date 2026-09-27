@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
+import { homePathFor } from '../../components/layout/portalNav';
 import type { UserRole } from './api';
 import { useAuth } from './useAuth';
 
@@ -19,7 +20,8 @@ export function RequireAuth({ children, roles }: RequireAuthProps) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
   if (roles && user.role !== 'super_admin' && !roles.includes(user.role)) {
-    return <Navigate to="/" replace />;
+    // Not allowed here: send them to their own home (every role may see its home).
+    return <Navigate to={homePathFor(user.role)} replace />;
   }
   return children;
 }

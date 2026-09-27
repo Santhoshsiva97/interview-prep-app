@@ -5,6 +5,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { EnvVars } from '../../../config/env.validation.js';
 import { PrismaService } from '../../../database/prisma.service.js';
 import type { Prisma, User } from '../../../generated/prisma/client.js';
+import { SessionRevocationService } from '../../../common/auth/session-revocation.service.js';
 import type { AccessTokenPayload } from '../../../common/types/auth-user.js';
 import { AuthError } from '../models/auth-error.js';
 import {
@@ -37,6 +38,7 @@ export class TokenService {
   constructor(
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
+    private readonly revocation: SessionRevocationService,
     config: ConfigService<EnvVars, true>,
   ) {
     this.accessTtlSeconds = config.get('JWT_ACCESS_TTL_SECONDS', {
@@ -53,7 +55,11 @@ export class TokenService {
     familyId: string = randomUUID(),
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<IssuedSession & { refreshTokenId: string }> {
-    const payload: AccessTokenPayload = { sub: user.id, role: user.role };
+    const payload: AccessTokenPayload = {
+      sub: user.id,
+      role: user.role,
+      iatMs: Date.now(),
+    };
     const accessToken = await this.jwt.signAsync(payload);
 
     const refreshToken = randomBytes(32).toString('base64url');
@@ -136,13 +142,24 @@ export class TokenService {
     });
   }
 
-  /** Revokes every active session for a user (password reset, force-logout). */
+  /**
+   * Logs a user out everywhere, effective immediately (password reset,
+   * suspension, role change, admin force-logout). Returns revoked sessions.
+   */
   async revokeAllForUser(userId: string): Promise<number> {
     const { count } = await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    await this.revocation.revokeAccessTokens(userId);
     return count;
+  }
+
+  /** Number of unexpired, unrevoked refresh tokens (≈ signed-in devices). */
+  countActiveSessions(userId: string): Promise<number> {
+    return this.prisma.refreshToken.count({
+      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+    });
   }
 
   private async revokeFamily(familyId: string): Promise<void> {

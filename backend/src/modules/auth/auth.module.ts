@@ -34,7 +34,8 @@ import { TokenService } from './services/token.service.js';
     // STEP 5 HOOK: replace ConsoleOtpSender with the Mail Module's sender.
     { provide: OTP_SENDER, useClass: ConsoleOtpSender },
   ],
-  // TokenService.revokeAllForUser is used for admin force-logout (Step 4).
-  exports: [TokenService],
+  // Used by the admin module: TokenService (force-logout, suspension, role
+  // changes) and OtpService (account-setup codes for new staff).
+  exports: [TokenService, OtpService],
 })
 export class AuthModule {}

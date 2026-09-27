@@ -1,5 +1,11 @@
 import { createBrowserRouter, Navigate } from 'react-router';
+import { AdminLayout } from '../components/layout/AdminLayout';
 import { AppLayout } from '../components/layout/AppLayout';
+import { RequireAuth } from '../features/auth/RequireAuth';
+import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
+import { AdminStaffPage } from '../pages/admin/AdminStaffPage';
+import { AdminUserDetailPage } from '../pages/admin/AdminUserDetailPage';
+import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
 import { PortalLayout } from '../components/layout/PortalLayout';
 import { ForgotPasswordPage } from '../pages/auth/ForgotPasswordPage';
 import { LoginPage } from '../pages/auth/LoginPage';
@@ -34,6 +40,91 @@ export const router = createBrowserRouter([
       { path: 'login', element: <LoginPage /> },
       { path: 'forgot-password', element: <ForgotPasswordPage /> },
 
+      { path: '*', element: <NotFoundPage /> },
+    ],
+  },
+
+  // Admin console (Step 4) — staff only; per-route roles mirror the API's @Roles()
+  {
+    path: 'admin',
+    element: <AdminLayout />,
+    errorElement: <ErrorPage />,
+    children: [
+      { index: true, element: <AdminDashboardPage /> },
+      {
+        path: 'users',
+        element: (
+          <RequireAuth roles={['admin', 'support']}>
+            <AdminUsersPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'users/:id',
+        element: (
+          <RequireAuth roles={['admin', 'support']}>
+            <AdminUserDetailPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'staff',
+        element: (
+          <RequireAuth roles={['super_admin']}>
+            <AdminStaffPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        // Step 7 (exam engine)
+        path: 'exams',
+        element: (
+          <ComingSoonPage
+            title="Exam & Template Builder"
+            description="Build mock exams and interview templates: sections, question selection, time limits and marking schemes."
+          />
+        ),
+      },
+      {
+        // Step 11 (payments)
+        path: 'plans',
+        element: (
+          <ComingSoonPage
+            title="Plan Configuration"
+            description="Create and edit subscription plans, pricing and the premium features each plan unlocks."
+          />
+        ),
+      },
+      {
+        // Step 11 (payments)
+        path: 'transactions',
+        element: (
+          <ComingSoonPage
+            title="Transaction Oversight"
+            description="Search payments and subscriptions, check gateway status and review refunds."
+          />
+        ),
+      },
+      {
+        // Step 12 (advertising)
+        path: 'ads',
+        element: (
+          <ComingSoonPage
+            title="Ad Slot Configuration"
+            description="Turn ad slots on or off per page and manage ad-free rules for subscribers."
+          />
+        ),
+      },
+      {
+        // Step 13 (audit log & security)
+        path: 'audit-log',
+        element: (
+          <ComingSoonPage
+            title="Audit Log"
+            description="A searchable record of privileged admin actions: who did what, and when."
+          />
+        ),
+      },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

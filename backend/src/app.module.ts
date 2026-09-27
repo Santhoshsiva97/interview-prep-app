@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { CommonModule } from './common/common.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { envValidationSchema } from './config/env.validation.js';
 import { DatabaseModule } from './database/database.module.js';
+import { AdminModule } from './modules/admin/admin.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { HealthModule } from './modules/health/health.module.js';
@@ -21,11 +23,13 @@ import { StorageModule } from './storage/storage.module.js';
       validationSchema: envValidationSchema,
     }),
     DatabaseModule,
+    CommonModule,
     StorageModule,
     AuthModule,
     HealthModule,
     ProfileModule,
     DashboardModule,
+    AdminModule,
   ],
   providers: [
     // Order matters: authenticate first, then check roles.

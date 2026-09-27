@@ -18,6 +18,15 @@ const paths = {
   target:
     'M12 12m-8 0a8 8 0 1 0 16 0 8 8 0 1 0-16 0M12 12m-4 0a4 4 0 1 0 8 0 4 4 0 1 0-8 0M12 12h.01',
   check: 'M5 12l5 5 9-10',
+  users:
+    'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7M18 14a6 6 0 0 1 4 7',
+  shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4',
+  receipt: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3',
+  megaphone: 'M3 10v4h4l6 4V6L7 10zM17 9a4 4 0 0 1 0 6M20 6a8 8 0 0 1 0 12',
+  search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5',
+  chevronLeft: 'M15 6l-6 6 6 6',
+  chevronRight: 'M9 6l6 6-6 6',
+  arrowLeft: 'M19 12H5M11 6l-6 6 6 6',
 } as const;
 
 export type IconName = keyof typeof paths;

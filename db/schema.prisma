@@ -60,15 +60,22 @@ model User {
   lastLoginAt         DateTime?  @map("last_login_at") @db.Timestamptz(6)
   passwordChangedAt   DateTime?  @map("password_changed_at") @db.Timestamptz(6)
   googleId            String?    @unique @map("google_id") @db.VarChar(255)
+  /// Set when an admin suspends the account (FRD §4.3); cleared on reactivation.
+  suspendedAt         DateTime?  @map("suspended_at") @db.Timestamptz(6)
+  suspendedById       String?    @map("suspended_by_id") @db.Uuid
+  suspensionReason    String?    @map("suspension_reason") @db.VarChar(500)
   createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt           DateTime?  @map("deleted_at") @db.Timestamptz(6)
 
-  refreshTokens RefreshToken[]
-  profile       UserProfile?
+  refreshTokens  RefreshToken[]
+  profile        UserProfile?
+  suspendedBy    User?          @relation("UserSuspensions", fields: [suspendedById], references: [id], onDelete: SetNull)
+  suspendedUsers User[]         @relation("UserSuspensions")
 
   @@index([role])
   @@index([status])
+  @@index([createdAt])
   @@map("users")
 }
 

@@ -21,7 +21,8 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "lint:check": "eslint \"{src,test}/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
-    "prebuild": "npm --prefix ../db run generate"
+    "prebuild": "npm --prefix ../db run generate",
+    "admin:promote": "node dist/cli/promote-super-admin.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",

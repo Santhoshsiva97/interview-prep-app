@@ -205,3 +205,87 @@ with the design document.
 - Step 11: `/subscription` placeholder. Step 12 ads must never go on `/profile` form flows or on exam routes.
 - Orphaned objects are possible if a DB write fails after an upload. A periodic sweep can be added
   with BullMQ later.
+
+---
+
+## 2026-09-27 — Step 4: Admin Portal Shell (FRD §4.3) ✅
+
+Branch `step-4-admin-portal` (on top of `step-3-client-portal`). The FRD still wasn't attached,
+so code cites "FRD §4.3" rather than FR-3.x numbers.
+
+**Admin page status**
+| Route | Status | Who sees it | Wired by |
+|---|---|---|---|
+| `/admin` | **Functional**. Live user KPIs (candidates, active/unverified, sign-ups 7/30 d, suspended, staff). DAU/MAU, active subscriptions, revenue and tests-taken are placeholders (`status: 'coming_soon'`) | all staff | Step 10 (engagement, tests), Step 11 (subscriptions, revenue) |
+| `/admin/users` | **Fully functional**: search (name/email/phone), role/status filters, sort, pagination, filters kept in the URL, table becomes cards on phones | admin, support | — |
+| `/admin/users/:id` | **Fully functional**: account facts, profile + resume, suspension banner; suspend (reason required) / reactivate / force-logout (admin); change role (super admin) | admin, support (read-only for support) | — |
+| `/admin/staff` | **Fully functional**: create editor/support/admin accounts + team list | super admin | — |
+| `/admin/exams` | Placeholder | admin, editor | Step 7 |
+| `/admin/plans` | Placeholder | admin | Step 11 |
+| `/admin/transactions` | Placeholder | admin, support | Step 11 |
+| `/admin/ads` | Placeholder | admin | Step 12 |
+| `/admin/audit-log` | Placeholder | admin | Step 13 |
+
+To make a placeholder real: swap its `ComingSoonPage` in `frontend/src/app/router.tsx` and drop
+`soon: true` from `ADMIN_NAV` in `frontend/src/components/layout/portalNav.ts` (keep `roles` in sync
+with the API's `@Roles()`). To make a KPI live: return `{ status: 'live', data }` from
+`backend/src/modules/admin/services/admin-dashboard.service.ts`.
+
+**Backend endpoints** (`/api/v1/admin/...`)
+| Method | Path | Roles |
+|---|---|---|
+| GET | `/dashboard` | editor, support, admin |
+| GET | `/users?search&role&status&scope=all\|staff\|candidates&sort=newest\|oldest\|name\|last_login&page&pageSize≤100` | admin, support |
+| GET | `/users/:id` (profile, presigned avatar/resume, active session count, suspension info) | admin, support |
+| POST | `/users/:id/suspend` `{ reason }` · `/users/:id/reactivate` · `/users/:id/force-logout` | admin |
+| PATCH | `/users/:id/role` `{ role: candidate\|editor\|support\|admin }` | super_admin |
+| POST | `/staff` `{ name, email, phone?, role: editor\|support\|admin }` | super_admin |
+(super_admin passes every role check.) Error codes: `USER_NOT_FOUND`, `CANNOT_MANAGE_SELF`,
+`CANNOT_MANAGE_SUPER_ADMIN`, `STAFF_REQUIRES_SUPER_ADMIN`, `ALREADY_SUSPENDED`, `NOT_SUSPENDED`, `EMAIL_TAKEN`.
+
+**Rules and design decisions**
+- **Who can manage whom:** admins manage candidates only. Only a super admin can act on staff
+  accounts. Nobody can act on their own account or on a super_admin. `super_admin` can't be assigned
+  through the API: bootstrap it with the CLI `npm --prefix backend run admin:promote -- <email>`.
+- **Force-logout is immediate** (it used to be "within 15 min"). `TokenService.revokeAllForUser` now
+  also writes a per-user revocation timestamp to Redis (`SessionRevocationService`), and
+  `JwtAuthGuard` rejects older access tokens. Access tokens now carry `iatMs`, because the standard
+  `iat` has 1-second resolution and a token minted in the same second slipped through. The e2e
+  tests caught this. Suspension, role changes and password resets get the same immediate effect.
+  The check fails open if Redis is down; refresh tokens are still revoked in Postgres.
+- **Staff onboarding without passwords:** creating staff makes a passwordless `pending_verification`
+  account and sends a `reset_password` OTP. The new staff member sets a password on the normal
+  "Forgot password" screen, which also verifies the email. Nobody handles someone else's password.
+- **Schema:** migration `20260927133000_admin_user_suspension` adds `users.suspended_at`,
+  `suspended_by_id` (FK → users, SET NULL), `suspension_reason`, plus an index on `created_at`.
+- `AuthModule` now also exports `OtpService`. New global `CommonModule` provides `SessionRevocationService`.
+
+**Frontend**
+- `AppShell` is shared by the portal and admin layouts (the Step 3 `PortalLayout` was refactored
+  onto it). The admin nav is filtered by role, and the brand shows an "Admin" badge.
+- Staff log in to `/admin`. The profile menu switches between "Admin console" and "Candidate portal",
+  and the public header shows "Admin console" for staff. `RequireAuth` role failures now redirect to
+  the user's own home instead of `/`.
+- New shared UI: `components/ui/Dialog` (native `<dialog>` confirm modal) and `Button.module.css`.
+
+**Verified**
+- Backend: lint/build pass. 27 unit tests (new: revocation boundary, expiry, fail-open). 23 e2e tests
+  against real Postgres, including 9 new admin tests: RBAC per role, dashboard shape, search/filter/
+  scope/pagination/validation, detail, suspend → the old token is rejected at once → login blocked →
+  reactivate, force-logout of 2 sessions, the self/staff/super-admin protections, role change
+  (super-admin only, can't grant super_admin, old token dead, new login has the new role), and staff
+  creation → setup OTP → reset → login as editor. Ran twice, stable.
+- CLI: promotes an existing account and rejects unknown emails.
+- Browser (1024px + 375px): super admin lands on `/admin`, KPIs render, search updates the URL,
+  suspend via dialog shows the banner and status, create editor → team list, editor sees only
+  Dashboard + Exam Builder and is redirected from `/admin/staff`, user table becomes cards on phones
+  with no overflow.
+- **Still not verified:** MinIO / `docker compose up` (no Docker on this machine).
+
+**Notes for next steps**
+- Step 13 (audit log): hook into `AdminUsersService` (suspend, reactivate, force-logout, changeRole,
+  createStaff). The actor and target are already available there, so reuse this service rather than
+  building a second mechanism.
+- Step 7/11/12: replace the admin placeholders above and add their roles to `ADMIN_NAV`.
+- The local Prisma dev Postgres (no Docker) can't run concurrent queries, so there are sporadic 500s
+  in the browser. That's documented in the README and isn't an app bug.

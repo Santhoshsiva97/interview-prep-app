@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router';
 import { useAuth } from '../../features/auth/useAuth';
 import styles from './AppLayout.module.css';
+import { isStaff } from './portalNav';
 
 const navItems = [
   { to: '/practice', label: 'Practice' },
@@ -33,8 +34,11 @@ export function AppLayout() {
           <div className={styles.actions}>
             {initializing ? null : user ? (
               <>
-                <Link to="/dashboard" className="button">
-                  Dashboard
+                <Link
+                  to={isStaff(user.role) ? '/admin' : '/dashboard'}
+                  className="button"
+                >
+                  {isStaff(user.role) ? 'Admin console' : 'Dashboard'}
                 </Link>
                 <button
                   type="button"

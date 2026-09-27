@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
+import { SessionRevocationService } from '../auth/session-revocation.service.js';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
 import type { AccessTokenPayload } from '../types/auth-user.js';
 
@@ -19,6 +20,7 @@ export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
+    private readonly revocation: SessionRevocationService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -34,12 +36,18 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing access token');
     }
 
+    let payload: AccessTokenPayload;
     try {
-      const payload = await this.jwt.verifyAsync<AccessTokenPayload>(token);
-      request.user = { id: payload.sub, role: payload.role };
+      payload = await this.jwt.verifyAsync<AccessTokenPayload>(token);
     } catch {
       throw new UnauthorizedException('Invalid or expired access token');
     }
+    // Force-logout / suspension / role change invalidate tokens immediately.
+    const issuedAtMs = payload.iatMs ?? (payload.iat ?? 0) * 1000;
+    if (await this.revocation.isRevoked(payload.sub, issuedAtMs)) {
+      throw new UnauthorizedException('Session has been revoked');
+    }
+    request.user = { id: payload.sub, role: payload.role };
     return true;
   }
 }

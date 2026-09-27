@@ -65,7 +65,15 @@ users, the question bank, exams, payments, and ads.
 - Access token: HS256 JWT, 15 min, sent as `Authorization: Bearer`. Refresh token: opaque, stored
   as SHA-256 in `refresh_tokens`, delivered only as the HttpOnly `refresh_token` cookie
   (Path `/api/v1/auth`, SameSite=Strict), rotated on every refresh with family-reuse detection
-- To log a user out everywhere (suspension, password change), call `TokenService.revokeAllForUser`
+- To log a user out everywhere (suspension, role change, password reset), call
+  `TokenService.revokeAllForUser`. It revokes refresh tokens **and** kills existing access tokens
+  immediately: `SessionRevocationService` (`src/common/auth/`) stores a per-user "revoked at" (ms)
+  in Redis and `JwtAuthGuard` rejects tokens whose `iatMs` claim is earlier. It fails open if Redis is down
+- Staff roles: `editor | support | admin` (+ `super_admin`). API access by role (FRD §4.3):
+  admin dashboard = any staff · user list/detail = admin, support · suspend/reactivate/force-logout =
+  admin · role changes + creating staff = super_admin only. Only super_admin can act on staff
+  accounts; nobody can act on themselves or on a super_admin. `super_admin` is never granted through
+  the API. Bootstrap it with `npm --prefix backend run admin:promote -- <email>` (after `build`)
 - Error bodies from auth carry a machine-readable `code` (see `modules/auth/models/auth-error.ts`)
 - Frontend: access token lives in memory only (`src/lib/api.ts`); `apiFetch` refreshes once on 401.
   Use `useAuth()` for the user; wrap protected routes in `<RequireAuth roles={[...]}>`
@@ -83,9 +91,14 @@ users, the question bank, exams, payments, and ads.
 
 ### Frontend (React)
 - Routes are declared in `src/app/router.tsx`; unbuilt routes use `<ComingSoonPage title description>`
-- Two layouts: `AppLayout` (public site + auth screens) and `PortalLayout` (signed-in client portal:
-  sidebar/drawer nav from `components/layout/portalNav.ts`, top bar with `ProfileMenu`). Portal
-  routes are children of the `PortalLayout` route and are auth-guarded automatically
+- Three layouts: `AppLayout` (public site + auth screens), `PortalLayout` (candidate portal) and
+  `AdminLayout` (`/admin/*`, staff only). The last two share `AppShell` (sidebar/drawer + top bar with
+  `ProfileMenu`). Nav lists live in `components/layout/portalNav.ts` (`PORTAL_NAV`, `ADMIN_NAV`).
+  Admin items carry `roles`, which must match the API's `@Roles()`. Per-route role gates use
+  `<RequireAuth roles>`, which redirects to the user's own home (`homePathFor(role)`). Staff log in
+  to `/admin`, candidates to `/dashboard`
+- Destructive actions use the `<Dialog>` confirm modal (`components/ui/Dialog.tsx`, native `<dialog>`);
+  shared button styles are in `components/ui/Button.module.css`
 - Portal pages read the current user's profile via `useProfile()` (loaded once by `ProfileProvider`);
   after any `/me/*` call, pass the returned profile to `setProfile()` so the header stays in sync
 - Shared form controls: `components/form/FormField.tsx` (`FormField`, `TextAreaField`, `FormAlert`);
@@ -103,12 +116,15 @@ users, the question bank, exams, payments, and ads.
 ```
 /frontend                      React + Vite app
   src/app/router.tsx           route table
-  src/components/layout/       AppLayout (public), PortalLayout + portalNav (client portal)
+  src/components/layout/       AppLayout (public), AppShell, PortalLayout, AdminLayout, portalNav
+  src/components/ui/           Dialog, Button styles
   src/components/form/         FormField, TextAreaField, FormAlert
   src/components/icons/        Icon (inline SVG set)
   src/pages/                   route-level pages (Home, ComingSoon, NotFound, Error)
   src/pages/auth/              Signup, VerifyEmail, Login, ForgotPassword
   src/pages/portal/            Dashboard, Profile
+  src/pages/admin/             AdminDashboard, AdminUsers, AdminUserDetail, AdminStaff
+  src/features/admin/          admin API client + types, role/status badges
   src/features/auth/           AuthProvider/useAuth, RequireAuth, auth API client, AuthCard
   src/features/profile/        ProfileProvider/useProfile, profile API, Avatar, ProfileMenu
   src/features/dashboard/      dashboard API types
@@ -123,10 +139,13 @@ users, the question bank, exams, payments, and ads.
   src/common/                  guards (JwtAuth, Roles), decorators (Public, Roles, CurrentUser), types
   src/modules/<feature>/       controllers/ services/ models/ + <feature>.module.ts
   src/common/errors/           AppError (coded HTTP errors)
+  src/common/auth/             SessionRevocationService (immediate access-token revocation)
+  src/cli/                     one-off scripts (promote-super-admin)
   src/storage/                 StorageService (S3-compatible, presigned URLs)
   src/modules/auth/            registration, OTP, login, tokens, password reset
   src/modules/profile/         /me/profile, /me/avatar, /me/resume (+ upload rules)
   src/modules/dashboard/       /dashboard (widget contract)
+  src/modules/admin/           /admin/dashboard, /admin/users/*, /admin/staff
   src/generated/prisma/        generated Prisma client (gitignored)
   test/                        e2e tests + test/utils (FakeRedis)
 /db                            Prisma package (CLI + config)

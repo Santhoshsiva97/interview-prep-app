@@ -1,0 +1,383 @@
+/* Shared styles for admin console pages. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.title {
+  margin: 0 0 4px;
+  font-size: clamp(1.5rem, 3vw, 1.875rem);
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 1.0625rem;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+/* ── KPI grid ── */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.kpiLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.kpiValue {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.kpiValue.placeholder {
+  color: var(--color-text-muted);
+}
+
+.kpiHint {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.sectionTitle {
+  margin: 0 0 12px;
+  font-size: 1.0625rem;
+}
+
+/* ── Badges ── */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge[data-tone='success'] {
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: var(--color-success);
+}
+
+.badge[data-tone='danger'] {
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+  color: var(--color-danger);
+}
+
+.badge[data-tone='primary'] {
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  color: var(--color-primary);
+}
+
+/* ── Filters ── */
+.filters {
+  display: grid;
+  grid-template-columns: minmax(200px, 2fr) repeat(3, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.searchBox {
+  position: relative;
+}
+
+.searchBox svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  color: var(--color-text-muted);
+  transform: translateY(-50%);
+}
+
+.input,
+.select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.searchBox .input {
+  padding-left: 38px;
+}
+
+.input:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* ── User table (stacks into cards on small screens) ── */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-size: 0.9375rem;
+}
+
+.table th,
+.table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.table tbody tr:hover {
+  background: var(--color-bg);
+}
+
+.userCell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.userCell a {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.userCell a:hover {
+  text-decoration: underline;
+}
+
+.userCell span {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+}
+
+.pagerButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.empty {
+  padding: 32px 16px;
+  text-align: center;
+}
+
+/* ── Detail page ── */
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--color-primary);
+}
+
+.identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.identity h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.facts dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.alertBox {
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 40%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+}
+
+.alertBox p {
+  margin: 4px 0 0;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.actions button {
+  width: 100%;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .searchBox {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .formGrid,
+  .facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Table → stacked cards */
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table {
+    border: 0;
+    background: transparent;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table tr {
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+  }
+
+  .table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+    border: 0;
+  }
+
+  .table td[data-label]::before {
+    content: attr(data-label);
+    color: var(--color-text-muted);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+}

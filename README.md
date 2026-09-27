@@ -74,6 +74,11 @@ npm --prefix frontend run dev         # http://localhost:5173, proxies /api -> :
 
 ### Dev notes
 
+- **First super admin:** sign up and verify an account, then run
+  `npm --prefix backend run build && npm --prefix backend run admin:promote -- you@example.com`
+  (in Docker: `docker compose exec backend npm run admin:promote -- you@example.com`). Log in
+  again and you land in the admin console at `/admin`. Other staff are created from **Admin → Staff & Roles**.
+
 - **OTP codes** (sign-up verification, password reset) are printed to the backend log as
   `[DEV OTP] ...` until the Mail Module (Step 5) sends real email.
 - **DB-backed e2e tests** run only when `E2E_DATABASE_URL` points at a migrated, throwaway database
@@ -85,6 +90,8 @@ npm --prefix frontend run dev         # http://localhost:5173, proxies /api -> :
   doesn't reset. If `migrate dev` fails with "already exists", generate the SQL without a shadow DB.
   From `db/`: `npx prisma migrate diff --from-config-datasource --to-schema schema.prisma --script -o migrations/<timestamp>_<name>/migration.sql`
   (create the folder first), then `npm run migrate:deploy`.
+  It also can't run two queries at once, so an occasional 500 with `bind message supplies N parameters`
+  is this server, not the app. Real Postgres (Docker) doesn't have the problem.
 
 In Docker, run DB commands inside the backend container, e.g.
 `docker compose exec backend npm --prefix ../db run migrate:dev -- --name add_users`.

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { Icon } from '../../../components/icons/Icon';
+import { isStaff } from '../../../components/layout/portalNav';
 import { useAuth } from '../../auth/useAuth';
 import { useProfile } from '../useProfile';
 import { Avatar } from './Avatar';
@@ -11,6 +12,7 @@ export function ProfileMenu() {
   const { user, logout } = useAuth();
   const { profile } = useProfile();
   const navigate = useNavigate();
+  const inAdmin = useLocation().pathname.startsWith('/admin');
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -63,6 +65,16 @@ export function ProfileMenu() {
           <Link role="menuitem" to="/subscription" onClick={close}>
             <Icon name="subscription" size={18} /> Subscription
           </Link>
+          {isStaff(user.role) &&
+            (inAdmin ? (
+              <Link role="menuitem" to="/dashboard" onClick={close}>
+                <Icon name="dashboard" size={18} /> Candidate portal
+              </Link>
+            ) : (
+              <Link role="menuitem" to="/admin" onClick={close}>
+                <Icon name="shield" size={18} /> Admin console
+              </Link>
+            ))}
           <hr />
           <button
             type="button"

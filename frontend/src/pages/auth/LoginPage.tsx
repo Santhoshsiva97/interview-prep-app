@@ -4,6 +4,7 @@ import { authApi } from '../../features/auth/api';
 import { AuthCard } from '../../features/auth/components/AuthCard';
 import styles from '../../features/auth/components/AuthForm.module.css';
 import { FormAlert, FormField } from '../../components/form/FormField';
+import { homePathFor } from '../../components/layout/portalNav';
 import { useAuth } from '../../features/auth/useAuth';
 import { ApiError, errorMessage } from '../../lib/api';
 
@@ -21,7 +22,9 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  if (user) return <Navigate to={state.from ?? '/dashboard'} replace />;
+  // Staff land in the admin console, candidates in their portal.
+  if (user)
+    return <Navigate to={state.from ?? homePathFor(user.role)} replace />;
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -30,8 +33,9 @@ export function LoginPage() {
     setError('');
     setSubmitting(true);
     try {
-      startSession(await authApi.login(email, String(form.get('password'))));
-      navigate(state.from ?? '/dashboard', { replace: true });
+      const session = await authApi.login(email, String(form.get('password')));
+      startSession(session);
+      navigate(state.from ?? homePathFor(session.user.role), { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED') {
         // A cooldown error just means a code was sent moments ago; it is still valid.

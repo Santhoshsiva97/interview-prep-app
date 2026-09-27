@@ -1,0 +1,52 @@
+/* Shared button styles for app pages: className={btn.primary} etc. */
+.primary,
+.secondary,
+.danger,
+.ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: var(--radius);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+
+.secondary {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.danger {
+  border: 0;
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.ghost {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-danger);
+}
+
+.ghost:hover {
+  border-color: color-mix(in srgb, var(--color-danger) 40%, transparent);
+}
+
+.primary:disabled,
+.secondary:disabled,
+.danger:disabled,
+.ghost:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

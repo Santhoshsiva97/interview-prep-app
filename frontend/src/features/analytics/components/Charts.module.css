@@ -1,0 +1,141 @@
+.wrap {
+  position: relative;
+}
+
+.radar {
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  margin: 0 auto;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.radar g[tabindex]:focus,
+.chart g[tabindex]:focus {
+  outline: none;
+}
+
+.radar g[tabindex]:focus-visible .dot,
+.chart g[tabindex]:focus-visible .dot,
+.chart g[tabindex]:focus-visible .bar {
+  stroke: var(--color-text);
+  stroke-width: 2;
+}
+
+.grid {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.axisLabel {
+  fill: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tick {
+  fill: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.area {
+  fill: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  stroke: var(--color-primary);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.line {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.dot {
+  fill: var(--color-primary);
+  stroke: var(--color-surface);
+  stroke-width: 2;
+}
+
+.bar {
+  fill: var(--color-primary);
+}
+
+.barActive {
+  fill: color-mix(in srgb, var(--color-primary) 70%, var(--color-text));
+}
+
+.tooltip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  max-width: min(300px, 90%);
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.15);
+  font-size: 0.8125rem;
+  pointer-events: none;
+}
+
+.tooltip span {
+  color: var(--color-text-muted);
+}
+
+/* ── Small multiples ── */
+.small {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.smallHead {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 0 8px;
+}
+
+.smallHead span {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.smallHead strong {
+  font-size: 1.25rem;
+}
+
+.smallHead small {
+  grid-column: 1 / -1;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+/* The radar scales down on phones: bump its text so it stays readable. */
+@media (max-width: 640px) {
+  .radar .axisLabel {
+    font-size: 16px;
+  }
+
+  .radar .tick {
+    font-size: 13px;
+  }
+}

@@ -1,16 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service.js';
+import { PlatformAnalyticsService } from '../../analytics/services/platform-analytics.service.js';
 import type { AdminDashboard } from '../models/admin-response.model.js';
 
 const DAY_MS = 86_400_000;
 
 /**
- * Admin dashboard KPIs (FRD §4.3). User counts are live; the rest keep a
- * stable `{ status, data }` shape until Steps 7–11 produce the data.
+ * Admin dashboard KPIs (FRD §4.3 / §4.9). Users, engagement and test volume
+ * are live; subscriptions keep a stable `{ status, data }` shape until
+ * payments (Step 11) exist.
  */
 @Injectable()
 export class AdminDashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly analytics: PlatformAnalyticsService,
+  ) {}
 
   async get(): Promise<AdminDashboard> {
     const now = Date.now();
@@ -48,6 +53,7 @@ export class AdminDashboardService {
         },
       }),
     ]);
+    const k = await this.analytics.kpis();
 
     return {
       users: {
@@ -62,12 +68,28 @@ export class AdminDashboardService {
           newSignups30d,
         },
       },
-      engagement: { status: 'coming_soon', data: { dau: null, mau: null } },
+      engagement: {
+        status: 'live',
+        data: {
+          dau: k.dau,
+          wau: k.wau,
+          mau: k.mau,
+          stickiness: k.stickinessBp / 100,
+        },
+      },
       subscriptions: {
         status: 'coming_soon',
         data: { active: null, revenueThisMonthCents: null },
       },
-      testVolume: { status: 'coming_soon', data: { attempts7d: null } },
+      testVolume: {
+        status: 'live',
+        data: {
+          attempts7d: k.attempts7d,
+          attempts30d: k.attempts30d,
+          graded30d: k.graded30d,
+          avgPercent30d: k.avgPercent30d,
+        },
+      },
     };
   }
 }

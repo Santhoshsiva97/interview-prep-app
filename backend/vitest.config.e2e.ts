@@ -10,6 +10,8 @@ export default defineConfig({
     fileParallelism: false,
     // DB-backed flows (take → submit → grade → scorecard) run several requests per test.
     testTimeout: 20_000,
+    // Suite setup creates users (argon2 hashing), questions, exams and graded attempts.
+    hookTimeout: 60_000,
     // Satisfy env validation; Prisma/Redis are mocked in e2e tests.
     env: {
       NODE_ENV: 'test',
@@ -21,6 +23,8 @@ export default defineConfig({
       MAIL_WORKER_ENABLED: 'false',
       EXAM_SWEEPER_ENABLED: 'false',
       JUDGE_WORKER_ENABLED: 'false',
+      ANALYTICS_WORKER_ENABLED: 'false',
+      ANALYTICS_REFRESH_MINUTES: '0',
     },
   },
 });

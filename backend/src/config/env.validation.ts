@@ -89,6 +89,12 @@ export interface EnvVars {
   /** Attempts per judge job (runs and grading), exponential backoff. */
   JUDGE_MAX_ATTEMPTS: number;
   JUDGE_RETRY_BASE_DELAY_MS: number;
+
+  // ── Analytics (FRD §4.9) ──
+  /** Rebuild question_stats this often (minutes); 0 = only on demand. */
+  ANALYTICS_REFRESH_MINUTES: number;
+  /** Run the analytics queue worker in this process. */
+  ANALYTICS_WORKER_ENABLED: boolean;
 }
 
 // Validated once at boot; the app refuses to start on a bad/missing value.
@@ -202,4 +208,11 @@ export const envValidationSchema = Joi.object<EnvVars, true>({
   JUDGE_WORKER_CONCURRENCY: Joi.number().integer().min(1).max(50).default(4),
   JUDGE_MAX_ATTEMPTS: Joi.number().integer().min(1).max(10).default(3),
   JUDGE_RETRY_BASE_DELAY_MS: Joi.number().integer().min(100).default(5000),
+
+  ANALYTICS_REFRESH_MINUTES: Joi.number()
+    .integer()
+    .min(0)
+    .max(1440)
+    .default(15),
+  ANALYTICS_WORKER_ENABLED: Joi.boolean().default(true),
 });

@@ -177,6 +177,24 @@ users, the question bank, exams, payments, and ads.
 - Charts (`pages/portal/history/ScorecardCharts.tsx`) are dependency-free SVG, single hue (`--color-primary`),
   per-mark hover/focus tooltips, and a table for every chart
 
+### Analytics (Step 10)
+- `modules/analytics/`: **platform KPIs** (`PlatformAnalyticsService`: DAU/WAU/MAU, attempts, average score, daily UTC
+  series), **question quality** (`QuestionStatsService`) and **candidate insights** (`InsightsService`: mastery by topic
+  and difficulty, trend, recommendations). The admin dashboard and the candidate dashboard's recommendations read these
+- "Active user" = a candidate with a `refresh_tokens` row issued in the window (every login and ≤15-min token refresh
+  writes one). Don't add separate activity tracking without revisiting this
+- `question_stats` is **derived data** rebuilt in one SQL statement by the `analytics` BullMQ queue
+  (`question-stats` job, deduplicated by job id): every `ANALYTICS_REFRESH_MINUTES` and on admin "Refresh now".
+  Worker: `AnalyticsWorkerModule` (`ANALYTICS_WORKER_ENABLED`). Safe to truncate and rebuild
+- **CSV export:** any analytics endpoint accepts `?format=csv` and returns a download via `toCsv()` + `sendCsv()`
+  (`analytics/models/csv.ts`): UTF-8 BOM, RFC 4180, and **formula neutralising** (text starting with = + - @ gets a
+  leading `'`). Use these for every new export; never hand-roll CSV
+- Mastery = share of available marks earned (a negative mark counts as 0 for that question); topic levels need ≥ 3
+  questions (strong ≥ 75%, developing ≥ 50%, else needs work). Question flags need ≥ 5 answers (too easy ≥ 90% fully
+  correct, too hard ≤ 20%, unused = live but never attempted)
+- Keep analytics queries **sequential** (no `Promise.all` of DB calls): cheap, and the local dev database can't run
+  queries in parallel
+
 ### Frontend (React)
 - Routes are declared in `src/app/router.tsx`; unbuilt routes use `<ComingSoonPage title description>`
 - Three layouts: `AppLayout` (public site + auth screens), `PortalLayout` (candidate portal) and
@@ -217,6 +235,9 @@ users, the question bank, exams, payments, and ads.
   src/pages/portal/tests/      Tests catalog, TestInstructions (pre-test consent)
   src/pages/portal/history/    History (attempts list), Scorecard (breakdowns, charts, answer review)
   src/features/scorecards/     scorecards API client/types + formatters
+  src/pages/portal/insights/   Insights (topic radar, difficulty, trend, recommendations)
+  src/pages/admin/AdminAnalyticsPage.tsx   question-quality table (flags, sort, refresh, CSV)
+  src/features/analytics/      analytics API client (incl. CSV downloads) + SVG charts (radar, daily columns, trend)
   src/pages/exam/              ExamRuntime (MCQ/coding panels, palette, timers, submit), SubmittedSummary
   src/features/exams/          exams API client/types, builder form model, useExamRuntime, CodeEditor (Monaco), QuestionPicker
   src/features/questions/      question-bank API client/types, editor form model, badges
@@ -250,6 +271,8 @@ users, the question bank, exams, payments, and ads.
   src/modules/judge/           judge queue (runs + grading), scoring, runners (Judge0, local, disabled),
                                /exam-sessions/:id/runs, /admin/exam-sessions/:id/grading|regrade
   src/modules/scorecards/      scorecards built on `graded`: /scorecards, /scorecards/:sessionId
+  src/modules/analytics/       KPIs, question_stats job (`analytics` queue), insights, CSV export:
+                               /admin/analytics/overview|questions, /insights
   src/cli/                     promote-super-admin, seed-dev
   src/generated/prisma/        generated Prisma client (gitignored)
   test/                        e2e tests + test/utils (createTestApp, FakeRedis, FakeStorage, FakeQueue, CapturingTransport, fakeConfig)

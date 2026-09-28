@@ -291,6 +291,7 @@ model Question {
   reviewedBy       User?             @relation("QuestionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   examItems        ExamItem[]
   sessionItems     ExamSessionItem[]
+  stats            QuestionStat?
 
   @@index([status])
   @@index([type])
@@ -749,4 +750,39 @@ model Scorecard {
   @@index([userId, submittedAt])
   @@index([examId, attemptNumber, scoreCenti])
   @@map("scorecards")
+}
+
+// ──────────────────────────────── Analytics ───────────────────────────────────
+// FRD §4.9. Built ahead of Step 1: reconcile with the Database Module Design Document.
+
+/// Question-quality stats (FRD §4.9), rebuilt by the background aggregation job
+/// from graded attempts (all versions of the question combined). Rates in basis
+/// points (100 bp = 1%). Derived data: safe to truncate and recompute.
+model QuestionStat {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  questionId    String    @unique @map("question_id") @db.Uuid
+  /// Times the question appeared in a graded attempt.
+  attempts      Int
+  /// ...of which the candidate gave an answer.
+  answered      Int
+  correct       Int
+  partial       Int
+  incorrect     Int
+  /// correct / answered.
+  accuracyBp    Int       @map("accuracy_bp")
+  /// Average share of the marks earned when answered (partial credit counts, negatives count as 0).
+  avgScoreBp    Int       @map("avg_score_bp")
+  /// Average time spent on the question when answered.
+  avgTimeMs     Int       @map("avg_time_ms")
+  lastAttemptAt DateTime? @map("last_attempt_at") @db.Timestamptz(6)
+  computedAt    DateTime  @map("computed_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([accuracyBp])
+  @@index([attempts])
+  @@map("question_stats")
 }

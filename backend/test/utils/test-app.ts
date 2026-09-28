@@ -22,6 +22,11 @@ import {
   type CodeRunner,
 } from '../../src/modules/judge/runners/code-runner.js';
 import { JudgeService } from '../../src/modules/judge/services/judge.service.js';
+import {
+  ANALYTICS_QUEUE,
+  type AnalyticsJob,
+} from '../../src/modules/analytics/models/analytics.model.js';
+import { QuestionStatsService } from '../../src/modules/analytics/services/question-stats.service.js';
 import { StorageService } from '../../src/storage/storage.service.js';
 import { CapturingTransport, FakeQueue } from './fake-mail.js';
 import { FakeRedis } from './fake-redis.js';
@@ -35,6 +40,8 @@ export interface TestApp {
   transport: CapturingTransport;
   /** The BullMQ `judge` queue; `drain()` runs jobs through the real JudgeService. */
   judgeQueue: FakeQueue<JudgeJob>;
+  /** The BullMQ `analytics` queue; `drain()` runs the real aggregation. */
+  analyticsQueue: FakeQueue<AnalyticsJob>;
   /** Runs queued mail through the real MailProcessor, then returns the latest code sent to `to`. */
   lastCode: (to: string) => Promise<string>;
 }
@@ -55,6 +62,7 @@ export async function createTestApp(
   const queue = new FakeQueue();
   const transport = new CapturingTransport();
   const judgeQueue = new FakeQueue<JudgeJob>();
+  const analyticsQueue = new FakeQueue<AnalyticsJob>();
 
   let builder = Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(RedisService)
@@ -66,7 +74,9 @@ export async function createTestApp(
     .overrideProvider(MAIL_TRANSPORT)
     .useValue(transport)
     .overrideProvider(getQueueToken(JUDGE_QUEUE))
-    .useValue(judgeQueue);
+    .useValue(judgeQueue)
+    .overrideProvider(getQueueToken(ANALYTICS_QUEUE))
+    .useValue(analyticsQueue);
   if (overrides.codeRunner) {
     builder = builder
       .overrideProvider(CODE_RUNNER)
@@ -96,10 +106,13 @@ export async function createTestApp(
   // JUDGE_WORKER_ENABLED=false in e2e: the fake queue drives the real service.
   const judge = moduleRef.get(JudgeService);
   judgeQueue.useProcessor((job) => judge.process(job));
+  const stats = moduleRef.get(QuestionStatsService);
+  analyticsQueue.useProcessor((job) => stats.process(job));
 
   return {
     app,
     judgeQueue,
+    analyticsQueue,
     moduleRef,
     storage,
     queue,

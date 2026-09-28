@@ -7,6 +7,8 @@ import { RolesGuard } from './common/guards/roles.guard.js';
 import { envValidationSchema } from './config/env.validation.js';
 import { DatabaseModule } from './database/database.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
+import { AnalyticsWorkerModule } from './modules/analytics/analytics-worker.module.js';
+import { AnalyticsModule } from './modules/analytics/analytics.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { ExamsModule } from './modules/exams/exams.module.js';
@@ -51,6 +53,11 @@ import { StorageModule } from './storage/storage.module.js';
     ConditionalModule.registerWhen(
       JudgeWorkerModule,
       (env) => env.JUDGE_WORKER_ENABLED !== 'false',
+    ),
+    AnalyticsModule,
+    ConditionalModule.registerWhen(
+      AnalyticsWorkerModule,
+      (env) => env.ANALYTICS_WORKER_ENABLED !== 'false',
     ),
   ],
   providers: [

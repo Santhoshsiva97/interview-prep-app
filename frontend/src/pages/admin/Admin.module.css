@@ -480,3 +480,18 @@
 .linkish:hover {
   color: var(--color-primary);
 }
+
+/* ── Trends (dashboard) ── */
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.multiples {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}

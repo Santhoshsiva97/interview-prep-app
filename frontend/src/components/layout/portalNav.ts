@@ -29,6 +29,7 @@ export const PORTAL_NAV: NavItem[] = [
   { to: '/tests', label: 'Mock Tests', icon: 'target' },
   { to: '/practice', label: 'Practice Library', icon: 'practice', soon: true },
   { to: '/history', label: 'History & Scorecards', icon: 'history' },
+  { to: '/insights', label: 'Insights', icon: 'activity' },
   { to: '/bookmarks', label: 'Bookmarks', icon: 'bookmark', soon: true },
   {
     to: '/subscription',
@@ -76,6 +77,12 @@ export const ADMIN_NAV: NavItem[] = [
     to: '/admin/exams',
     label: 'Exams',
     icon: 'target',
+    roles: ['admin', 'editor'],
+  },
+  {
+    to: '/admin/analytics',
+    label: 'Question analytics',
+    icon: 'activity',
     roles: ['admin', 'editor'],
   },
   {

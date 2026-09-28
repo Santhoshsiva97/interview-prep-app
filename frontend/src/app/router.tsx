@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router';
 import { AdminLayout } from '../components/layout/AdminLayout';
 import { AppLayout } from '../components/layout/AppLayout';
 import { RequireAuth } from '../features/auth/RequireAuth';
+import { AdminAnalyticsPage } from '../pages/admin/AdminAnalyticsPage';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
 import { AdminEmailPage } from '../pages/admin/AdminEmailPage';
 import { AdminStaffPage } from '../pages/admin/AdminStaffPage';
@@ -25,6 +26,7 @@ import { HomePage } from '../pages/HomePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { DashboardPage } from '../pages/portal/DashboardPage';
 import { HistoryPage } from '../pages/portal/history/HistoryPage';
+import { InsightsPage } from '../pages/portal/insights/InsightsPage';
 import { ScorecardPage } from '../pages/portal/history/ScorecardPage';
 import { ProfilePage } from '../pages/portal/ProfilePage';
 import { TestInstructionsPage } from '../pages/portal/tests/TestInstructionsPage';
@@ -140,6 +142,15 @@ export const router = createBrowserRouter([
           </RequireAuth>
         ),
       },
+      // Question analytics (Step 10)
+      {
+        path: 'analytics',
+        element: (
+          <RequireAuth roles={['editor', 'admin']}>
+            <AdminAnalyticsPage />
+          </RequireAuth>
+        ),
+      },
       // Exam & interview builder (Step 7)
       {
         path: 'exams',
@@ -244,6 +255,8 @@ export const router = createBrowserRouter([
       // History & Scorecards (Step 9)
       { path: 'history', element: <HistoryPage /> },
       { path: 'history/:sessionId', element: <ScorecardPage /> },
+      // Insights (Step 10)
+      { path: 'insights', element: <InsightsPage /> },
       {
         // Step 6 (question bank) — bookmarking questions
         path: 'bookmarks',

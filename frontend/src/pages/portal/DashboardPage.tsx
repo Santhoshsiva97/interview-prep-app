@@ -129,7 +129,7 @@ export function DashboardPage() {
             <ul className={styles.list}>
               {recommendedTests.data.map((t) => (
                 <li key={t.id}>
-                  <span>{t.title}</span>
+                  <Link to={`/tests/${t.id}`}>{t.title}</Link>
                   <span className={styles.meta}>
                     {t.topic} · {t.difficulty} · {t.durationMinutes} min
                   </span>

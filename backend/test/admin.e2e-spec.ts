@@ -100,7 +100,7 @@ describe.skipIf(!DB_URL)('Admin portal (e2e)', () => {
       .expect(403);
   });
 
-  it('dashboard: live user counts, placeholder KPIs', async () => {
+  it('dashboard: live user, engagement and test KPIs; payments still placeholders', async () => {
     const { body } = await as(
       'admin',
       http().get('/api/v1/admin/dashboard'),
@@ -108,12 +108,16 @@ describe.skipIf(!DB_URL)('Admin portal (e2e)', () => {
     expect(body.users.status).toBe('live');
     expect(body.users.data.totalCandidates).toBeGreaterThanOrEqual(2);
     expect(body.users.data.staff).toBeGreaterThanOrEqual(4);
-    expect(body.engagement).toEqual({
-      status: 'coming_soon',
-      data: { dau: null, mau: null },
+    // Live since Step 10 (analytics); payments (Step 11) are still to come.
+    expect(body.engagement.status).toBe('live');
+    expect(body.engagement.data).toEqual({
+      dau: expect.any(Number),
+      wau: expect.any(Number),
+      mau: expect.any(Number),
+      stickiness: expect.any(Number),
     });
+    expect(body.testVolume.status).toBe('live');
     expect(body.subscriptions.status).toBe('coming_soon');
-    expect(body.testVolume.status).toBe('coming_soon');
   });
 
   it('searches, filters and paginates users', async () => {

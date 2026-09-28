@@ -138,7 +138,7 @@ The FRD wasn't attached again, so code cites "FRD §4.2" rather than FR-2.x numb
 **Page status — what later steps need to wire up**
 | Route | Status | Wired by |
 |---|---|---|
-| `/dashboard` | **Functional** shell. *Profile strength* is live; *Recent activity* is live since Step 9 (graded attempts, linking to scorecards); *Daily streak* and *Recommended tests* are placeholders (`status: 'coming_soon'`) | Streak → Step 17 · Recommendations → Steps 6 + 10 |
+| `/dashboard` | **Functional** shell. *Profile strength* is live; *Recent activity* is live since Step 9 (graded attempts, linking to scorecards); *Recommended tests* is live since Step 10 (untaken tests aimed at weak topics); only *Daily streak* is a placeholder (`status: 'coming_soon'`) | Streak → Step 17 |
 | `/profile` | **Fully functional**: edit details, avatar upload/change/remove, resume upload/replace/remove/download | — |
 | `/practice` | Placeholder (`ComingSoonPage`) | Step 6 (+ Step 19 search/filter) |
 | `/history` | ✅ **Functional since Step 9**: attempts list + `/history/:sessionId` scorecards (see the Step 9 entry) | — |
@@ -216,7 +216,7 @@ so code cites "FRD §4.3" rather than FR-3.x numbers.
 **Admin page status**
 | Route | Status | Who sees it | Wired by |
 |---|---|---|---|
-| `/admin` | **Functional**. Live user KPIs (candidates, active/unverified, sign-ups 7/30 d, suspended, staff). DAU/MAU, active subscriptions, revenue and tests-taken are placeholders (`status: 'coming_soon'`) | all staff | Step 10 (engagement, tests), Step 11 (subscriptions, revenue) |
+| `/admin` | ✅ **Functional (KPI dashboard since Step 10)**. Live user KPIs; DAU/WAU/MAU, tests taken and average score are live since Step 10, with 30-day trend charts + CSV (admin, support). Only active subscriptions and revenue remain placeholders (`status: 'coming_soon'`) | all staff | Step 11 (subscriptions, revenue) |
 | `/admin/users` | **Fully functional**: search (name/email/phone), role/status filters, sort, pagination, filters kept in the URL, table becomes cards on phones | admin, support | — |
 | `/admin/users/:id` | **Fully functional**: account facts, profile + resume, suspension banner; suspend (reason required) / reactivate / force-logout (admin); change role (super admin) | admin, support (read-only for support) | — |
 | `/admin/staff` | **Fully functional**: create editor/support/admin accounts + team list | super admin | — |
@@ -718,3 +718,58 @@ are marked `pending`, so the recovery sweep grades them).
   topics are already sorted weakest-first per scorecard, a natural start for recommendations.
 - Step 13 (audit log): staff views of other candidates' scorecards (`GET /scorecards/:id` by admin/support) could be logged.
 - Step 17 (gamification): streaks can count submitted attempts from `/scorecards`.
+
+---
+
+## 2026-09-28 — Step 10: Insights & Analytics (FRD §4.9) ✅
+
+Branch `step-10-analytics` (from `main` @ Step 9). The FRD still wasn't attached, so code cites "FRD §4.9" rather than
+FR-9.1…FR-9.7. Migration `20260928200000_question_stats` (table `question_stats`, 1:1 with questions, derived data).
+
+**✅ The Step 4 admin dashboard placeholder is now a functional KPI dashboard** (Step 4 table row above updated): DAU,
+WAU, MAU, stickiness (DAU/MAU), tests taken 7/30 days and average score are live, with 30-day trend charts (sign-ups,
+active users, tests submitted, average score) and CSV export for admin and support. Only **active subscriptions and
+revenue stay "coming soon"**: they need payments (Step 11), and no numbers are invented. The candidate dashboard's
+**Recommended tests** widget is live too (Step 3 table row updated).
+
+**What's built**
+| FR area | Where |
+|---|---|
+| Candidate strength/weakness radar from full history | `/insights` (portal nav "Insights"): radar of **mastery by topic** (share of marks earned across every graded question; 3+ topics, otherwise bars) + table with levels (strong ≥ 75%, developing ≥ 50%, needs work; ≥ 3 questions required), mastery by difficulty, score trend over time, totals, and **Take next**: up to 3 untaken tests ranked by how many questions cover the weakest topics (newest tests when there's no history) |
+| Admin KPI dashboard | `/admin` (see above). `GET /api/v1/admin/analytics/overview?days=7–365` [admin, support] returns KPIs + a zero-filled daily UTC series |
+| Question-quality analytics as a background aggregation job | `question_stats` rebuilt by the **`analytics` BullMQ queue** (`question-stats` job, deduplicated by job id; worker `AnalyticsWorkerModule`, `ANALYTICS_WORKER_ENABLED`) every `ANALYTICS_REFRESH_MINUTES` (15; 0 = on demand only), on boot and via **Refresh now**. One SQL upsert over graded attempts: attempts, answered, correct/partial/incorrect, accuracy (fully correct / answered), average score share, average time. `/admin/analytics` ("Question analytics", editor + admin): filters, sortable columns (no-data rows always last), flags **too easy** (≥ 90%), **too hard** (≤ 20%; both need ≥ 5 answers), **unused** (live, never attempted) |
+| CSV export for any analytics view | Every analytics endpoint takes `?format=csv` → download (`text/csv`, attachment, dated file name): platform daily series, question stats (respecting the filters), my topic insights. `toCsv()` writes a UTF-8 BOM (Excel), RFC 4180 quoting, and **neutralises spreadsheet formulas** (text cells starting with = + - @ get a leading `'`; real numbers stay numbers) |
+
+**Decisions**
+- **"Active user" = a candidate with a session token issued in the window.** Every login and every ≤ 15-minute
+  access-token refresh writes a `refresh_tokens` row, so DAU/MAU need no new tracking table. Days are UTC.
+- Mastery counts a negative-marked question as 0 (so one penalty can't sink a topic below zero); "time in tests" on
+  Insights is time on questions, not wall time (a paused attempt can stay open for hours).
+- Charts are dependency-free SVG (radar, daily small multiples, trend line): single hue, focusable marks with tooltips,
+  a table for each. Analytics DB calls are sequential, never `Promise.all` (cheap, and local-DB friendly).
+- New env: `ANALYTICS_REFRESH_MINUTES` (15), `ANALYTICS_WORKER_ENABLED` (true). New error code `ANALYTICS_UNAVAILABLE`
+  (503, queue down on "Refresh now").
+
+**Verified**
+- Backend: typecheck 0, lint, prettier. **103 unit tests** (new: CSV quoting/BOM/formula neutralising; mastery,
+  levels, topic/difficulty groupings). **62 e2e tests** (new analytics suite, 4): stats job via the queue with flags,
+  filters, idempotent rebuild, no-data-last sorting, CSV incl. a question titled `=HYPERLINK(…)` exported as
+  `'=HYPERLINK(…)`, RBAC; insights (levels, difficulty, trend, weak-topic recommendation first, CSV, empty history);
+  live admin + candidate dashboard widgets; overview series + CSV, RBAC. Step 3/4 dashboard tests updated to expect
+  live widgets. Frontend: lint, prettier, build.
+- Browser (1280px + 375px): Insights with radar/table/difficulty/trend; admin dashboard KPIs + 30-day charts; question
+  analytics with flags and sorting; the boot-time job rebuilt stats for 13 questions; insights CSV served as an
+  attachment. No horizontal overflow on phones.
+- **Found and fixed while testing:** (1) "10h 07m in tests" summed wall time of an attempt left open overnight → now time
+  on questions; (2) radar labels clipped and the top label collided with the ring value → wider canvas, ring values
+  moved, labels truncated at 16 characters with sizes tuned for phones; (3) the dashboard silently hid the trend charts
+  when their request failed → loaded after the KPIs with an error + "Try again"; (4) sorting by accuracy put
+  never-answered questions first → no-data rows last in either direction. E2E `hookTimeout` raised to 60 s (suite
+  setup creates many users with argon2 hashing).
+
+**Notes for next steps**
+- Step 11 (payments): fill `subscriptions` on `GET /admin/dashboard` (`active`, `revenueThisMonthCents`) and add
+  revenue to the overview series + CSV.
+- Step 17 (gamification): streaks could reuse the `refresh_tokens` activity signal or submitted attempts.
+- Step 19 (search): `question_stats` can feed "popular" / "hardest" sorting in the practice library.
+- The question editor could show its `question_stats` row; the stats table is already joined per question.

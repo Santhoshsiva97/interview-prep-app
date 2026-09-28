@@ -1,5 +1,5 @@
 // Local smoke-test launcher: compiled backend + real Postgres (prisma dev) +
-// in-memory Redis fake + in-process stand-ins for the BullMQ `mail` and `judge` queues
+// in-memory Redis fake + in-process stand-ins for the BullMQ `mail`, `judge` and `analytics` queues
 // (this machine has no Redis). Mail goes through the real MailProcessor and
 // real Nodemailer SMTP transport. DEV ONLY. See tools/local-dev/README.md.
 // Run with cwd = backend/ after `npm run build`.
@@ -12,6 +12,7 @@ const imp = (p) => import(pathToFileURL(B + p).href);
 process.env.DATABASE_URL = process.env.SMOKE_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:51214/template1?sslmode=disable';
 process.env.MAIL_WORKER_ENABLED = 'false'; // no BullMQ Worker without Redis
 process.env.JUDGE_WORKER_ENABLED = 'false';
+process.env.ANALYTICS_WORKER_ENABLED = 'false';
 
 const { Test } = await imp('node_modules/@nestjs/testing/index.js');
 const { ConsoleLogger } = await imp('node_modules/@nestjs/common/index.js');
@@ -25,6 +26,7 @@ const { MailProcessor } = await imp('dist/modules/mail/services/mail.processor.j
 const { MAIL_TRANSPORT } = await imp('dist/modules/mail/services/mail-transport.js');
 const { FakeRedis } = await imp('test/utils/fake-redis.ts');
 const { JudgeService } = await imp('dist/modules/judge/services/judge.service.js');
+const { QuestionStatsService } = await imp('dist/modules/analytics/services/question-stats.service.js');
 
 /** Runs jobs shortly after `add`, retrying with real exponential backoff. */
 class InlineQueue {
@@ -46,6 +48,7 @@ class InlineQueue {
 }
 const queue = new InlineQueue();
 const judgeQueue = new InlineQueue();
+const analyticsQueue = new InlineQueue();
 
 const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
   .overrideProvider(RedisService)
@@ -54,11 +57,14 @@ const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
   .useValue(queue)
   .overrideProvider(getQueueToken('judge'))
   .useValue(judgeQueue)
+  .overrideProvider(getQueueToken('analytics'))
+  .useValue(analyticsQueue)
   .compile();
 const app = moduleRef.createNestApplication({ logger: new ConsoleLogger() });
 configureApp(app);
 await app.listen(3000);
 judgeQueue.processor = moduleRef.get(JudgeService);
+analyticsQueue.processor = moduleRef.get(QuestionStatsService);
 queue.processor = new MailProcessor(
   moduleRef.get(PrismaService),
   moduleRef.get(MailService),

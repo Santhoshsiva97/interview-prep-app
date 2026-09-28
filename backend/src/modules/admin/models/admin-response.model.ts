@@ -74,13 +74,24 @@ export interface AdminDashboard {
     newSignups7d: number;
     newSignups30d: number;
   }>;
-  /** Step 10 (analytics). */
-  engagement: KpiWidget<{ dau: number | null; mau: number | null }>;
+  /** Live since Step 10: candidates with a session token issued in the window. */
+  engagement: KpiWidget<{
+    dau: number | null;
+    wau: number | null;
+    mau: number | null;
+    /** DAU / MAU in percent. */
+    stickiness: number | null;
+  }>;
   /** Step 11 (payments). */
   subscriptions: KpiWidget<{
     active: number | null;
     revenueThisMonthCents: number | null;
   }>;
-  /** Steps 7–10 (exam engine → analytics). */
-  testVolume: KpiWidget<{ attempts7d: number | null }>;
+  /** Live since Step 10. */
+  testVolume: KpiWidget<{
+    attempts7d: number | null;
+    attempts30d: number | null;
+    graded30d: number | null;
+    avgPercent30d: number | null;
+  }>;
 }

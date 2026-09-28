@@ -89,6 +89,21 @@ Always set `MAIL_FROM` to a sender you've verified with the provider (e.g. `Inte
 and `APP_BASE_URL` to the public web URL used in email links. Staff can check delivery status under
 **Admin → Email**.
 
+### Code judge
+
+Candidate code ("Run" and grading) goes through the `judge` BullMQ queue to the runner picked by `CODE_RUNNER`:
+
+| `CODE_RUNNER` | What runs code | Languages | Use |
+|---|---|---|---|
+| `judge0` | [Judge0 CE](https://github.com/judge0/judge0) 1.13 (isolate sandboxes: CPU/wall/memory limits, no network) | Python 3, JavaScript (Node), Java, C++ | production, full local stack |
+| `local` | plain child processes, **not sandboxed** | JavaScript, Python | dev only (refused in production) |
+| `disabled` (default) | nothing | none (coding answers can't be graded; MCQs are) | |
+
+Local Judge0: `docker compose --profile judge up --build` and set `CODE_RUNNER=judge0` in the root `.env`. The token in
+`tools/judge0/judge0.conf` (`AUTHN_TOKEN`) must match `JUDGE0_AUTH_TOKEN`. Judge0 1.13 needs **privileged containers and
+cgroup v1**. On cgroup-v2 hosts (recent Docker Desktop, Ubuntu 22.04+), boot with `systemd.unified_cgroup_hierarchy=0`,
+or run Judge0 on a separate VM and point `JUDGE0_URL` at it. Java answers must declare `public class Main`.
+
 ### Dev notes
 
 - **Sample data:** `npm --prefix backend run build && npm --prefix backend run seed:dev` loads 10 topics,

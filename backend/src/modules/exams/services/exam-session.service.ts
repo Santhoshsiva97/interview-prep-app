@@ -1,10 +1,9 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { AuthUser } from '../../../common/types/auth-user.js';
 import type { EnvVars } from '../../../config/env.validation.js';
 import { PrismaService } from '../../../database/prisma.service.js';
-import { RedisService } from '../../../database/redis.service.js';
 import { Prisma } from '../../../generated/prisma/client.js';
 import type { ExamSubmitReason } from '../../../generated/prisma/enums.js';
 import type { QuestionContent } from '../../question-bank/models/question-content.js';
@@ -28,12 +27,7 @@ import {
   shuffled,
   type SessionSnapshot,
 } from '../models/session-content.js';
-import type {
-  AnswerDto,
-  RunCodeDto,
-  SubmitSessionDto,
-} from '../models/session.dto.js';
-import { CODE_RUNNER, type CodeRunner } from './code-runner.js';
+import type { AnswerDto, SubmitSessionDto } from '../models/session.dto.js';
 import {
   ExamSessionLifecycle,
   type ExamSessionEvent,
@@ -48,8 +42,7 @@ export type ExamSessionErrorCode =
   | 'NOT_SECTION_TIMED'
   | 'ITEM_NOT_FOUND'
   | 'NOT_CODING_QUESTION'
-  | 'SECTION_LOCKED'
-  | 'RUN_COOLDOWN';
+  | 'SECTION_LOCKED';
 
 const fail = (
   status: HttpStatus,
@@ -76,6 +69,9 @@ const sessionSelect = {
   submitReason: true,
   snapshot: true,
   totalMarks: true,
+  gradingStatus: true,
+  scoreCenti: true,
+  gradedAt: true,
 } satisfies Prisma.ExamSessionSelect;
 
 type SessionRow = Prisma.ExamSessionGetPayload<{
@@ -101,7 +97,8 @@ export interface SyncResult {
 
 /**
  * Candidate side of the exam engine (FRD §4.6): start/resume, autosave,
- * timed sections, submit, and running code against sample cases.
+ * timed sections and submit. Grading and code runs live in the judge
+ * module (FRD §4.7), which listens to this service's lifecycle events.
  *
  * Every state change runs in a transaction holding a row lock on the
  * session, so autosaves, submits and the expiry sweep never interleave.
@@ -111,13 +108,10 @@ export class ExamSessionService {
   private readonly graceMs: number;
   private readonly autosaveMs: number;
   private readonly abandonAfterMs: number;
-  private readonly runCooldownSeconds: number;
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
     private readonly lifecycle: ExamSessionLifecycle,
-    @Inject(CODE_RUNNER) private readonly runner: CodeRunner,
     config: ConfigService<EnvVars, true>,
   ) {
     this.autosaveMs =
@@ -126,9 +120,6 @@ export class ExamSessionService {
       config.get('EXAM_OFFLINE_GRACE_SECONDS', { infer: true }) * 1000;
     this.abandonAfterMs =
       config.get('EXAM_ABANDON_AFTER_HOURS', { infer: true }) * 3_600_000;
-    this.runCooldownSeconds = config.get('CODE_RUN_COOLDOWN_SECONDS', {
-      infer: true,
-    });
   }
 
   // ── Start ──
@@ -272,6 +263,13 @@ export class ExamSessionService {
       serverTime: now,
       autosaveIntervalMs: this.autosaveMs,
       totalMarks: s.totalMarks,
+      /** Null while in progress. Scores are in marks (stored as hundredths). */
+      grading: s.gradingStatus && {
+        status: s.gradingStatus,
+        score: s.scoreCenti === null ? null : s.scoreCenti / 100,
+        maxScore: s.totalMarks,
+        gradedAt: s.gradedAt,
+      },
       items: items.map((i) => ({
         id: i.id,
         sectionIndex: i.sectionIndex,
@@ -283,6 +281,14 @@ export class ExamSessionService {
         visited: i.visitedAt !== null,
         answered: i.response !== null,
         timeSpentMs: i.timeSpentMs,
+        /** After grading: how the answer fared (details come with scorecards, Step 9). */
+        result:
+          s.gradingStatus === 'graded' && i.outcome
+            ? {
+                outcome: i.outcome,
+                score: i.scoreCenti === null ? null : i.scoreCenti / 100,
+              }
+            : null,
         response: accessible(i.sectionIndex) ? i.response : null,
         /** Null when locked (other timed section) or after submission. */
         question: accessible(i.sectionIndex)
@@ -394,12 +400,15 @@ export class ExamSessionService {
     });
   }
 
-  /** "Run" a coding answer against the question's sample test cases only. */
-  async run(user: AuthUser, id: string, dto: RunCodeDto) {
+  /**
+   * For "Run" (judge module): the caller's coding question in an open
+   * attempt, in the section that's currently open. Throws otherwise.
+   */
+  async runnableCodingItem(user: AuthUser, id: string, itemId: string) {
     const s = await this.findOwned(user, id);
     if (s.status !== 'in_progress') throw this.closed(s.submitReason);
     const item = await this.prisma.examSessionItem.findFirst({
-      where: { id: dto.itemId, sessionId: id },
+      where: { id: itemId, sessionId: id },
       include: { questionVersion: { select: { content: true } } },
     });
     if (!item)
@@ -428,34 +437,7 @@ export class ExamSessionService {
         'Only coding questions can be run.',
       );
     }
-    const ok = await this.redis
-      .set(`exam:run:${id}`, '1', 'EX', this.runCooldownSeconds, 'NX')
-      .catch(() => 'OK'); // Redis down: don't block the candidate.
-    if (ok === null) {
-      throw fail(
-        HttpStatus.TOO_MANY_REQUESTS,
-        'RUN_COOLDOWN',
-        'Please wait a moment before running again.',
-        { retryAfterSeconds: this.runCooldownSeconds },
-      );
-    }
-    const samples = content.coding.testCases.filter((t) => t.isSample);
-    const result = await this.runner.run({
-      language: dto.language,
-      source: dto.code,
-      tests: samples,
-      timeLimitMs: content.coding.timeLimitMs,
-      memoryLimitMb: content.coding.memoryLimitMb,
-    });
-    return {
-      status: result.status,
-      message: result.message ?? null,
-      results: result.results.map((r, i) => ({
-        ...r,
-        input: samples[i].input,
-        expectedOutput: samples[i].expectedOutput,
-      })),
-    };
+    return { session: s, item, coding: content.coding };
   }
 
   /** The candidate's attempts, newest first (also used by the catalog). */
@@ -725,6 +707,8 @@ export class ExamSessionService {
         submittedAt: now,
         submitReason: reason,
         timeRemainingMs,
+        // The judge module grades it (FRD §4.7).
+        gradingStatus: 'pending',
       },
     });
     events.push(await this.record(tx, s, 'submitted', now, { reason }));

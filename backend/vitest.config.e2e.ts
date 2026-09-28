@@ -18,6 +18,7 @@ export default defineConfig({
       MAIL_TRANSPORT: 'log',
       MAIL_WORKER_ENABLED: 'false',
       EXAM_SWEEPER_ENABLED: 'false',
+      JUDGE_WORKER_ENABLED: 'false',
     },
   },
 });

@@ -68,9 +68,27 @@ export interface EnvVars {
   /** Run the expiry sweep in this process. */
   EXAM_SWEEPER_ENABLED: boolean;
   EXAM_SWEEP_INTERVAL_SECONDS: number;
-  /** `disabled` until the judge exists (Step 8); `local` = unsandboxed child processes, dev only. */
-  CODE_RUNNER: 'disabled' | 'local';
+  /**
+   * Code execution (FRD §4.7): `judge0` = sandboxed Judge0 (production),
+   * `local` = unsandboxed child processes (dev only), `disabled` = none.
+   */
+  CODE_RUNNER: 'disabled' | 'local' | 'judge0';
   CODE_RUN_COOLDOWN_SECONDS: number;
+
+  // ── Judge (FRD §4.7) ──
+  /** Judge0 CE base URL, e.g. http://judge0-server:2358 (required for CODE_RUNNER=judge0). */
+  JUDGE0_URL?: string;
+  /** Header for the Judge0 auth token (Judge0's AUTHN_HEADER). */
+  JUDGE0_AUTH_HEADER: string;
+  JUDGE0_AUTH_TOKEN?: string;
+  /** Give up waiting for one batch of results after this long (the job is retried). */
+  JUDGE0_TIMEOUT_SECONDS: number;
+  /** Run the judge queue worker in this process. */
+  JUDGE_WORKER_ENABLED: boolean;
+  JUDGE_WORKER_CONCURRENCY: number;
+  /** Attempts per judge job (runs and grading), exponential backoff. */
+  JUDGE_MAX_ATTEMPTS: number;
+  JUDGE_RETRY_BASE_DELAY_MS: number;
 }
 
 // Validated once at boot; the app refuses to start on a bad/missing value.
@@ -166,11 +184,22 @@ export const envValidationSchema = Joi.object<EnvVars, true>({
   EXAM_SWEEP_INTERVAL_SECONDS: Joi.number().integer().min(5).default(60),
   // `local` runs candidate code unsandboxed: never allowed in production.
   CODE_RUNNER: Joi.string()
-    .valid('disabled', 'local')
+    .valid('disabled', 'local', 'judge0')
     .when('NODE_ENV', {
       is: 'production',
-      then: Joi.valid('disabled').default('disabled'),
+      then: Joi.valid('disabled', 'judge0').default('disabled'),
       otherwise: Joi.string().default('disabled'),
     }),
   CODE_RUN_COOLDOWN_SECONDS: Joi.number().integer().min(0).default(3),
+
+  JUDGE0_URL: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .when('CODE_RUNNER', { is: 'judge0', then: Joi.required() }),
+  JUDGE0_AUTH_HEADER: Joi.string().default('X-Auth-Token'),
+  JUDGE0_AUTH_TOKEN: Joi.string(),
+  JUDGE0_TIMEOUT_SECONDS: Joi.number().integer().min(5).default(60),
+  JUDGE_WORKER_ENABLED: Joi.boolean().default(true),
+  JUDGE_WORKER_CONCURRENCY: Joi.number().integer().min(1).max(50).default(4),
+  JUDGE_MAX_ATTEMPTS: Joi.number().integer().min(1).max(10).default(3),
+  JUDGE_RETRY_BASE_DELAY_MS: Joi.number().integer().min(100).default(5000),
 });

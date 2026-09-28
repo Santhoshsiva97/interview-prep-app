@@ -11,6 +11,8 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { ExamsModule } from './modules/exams/exams.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { JudgeWorkerModule } from './modules/judge/judge-worker.module.js';
+import { JudgeModule } from './modules/judge/judge.module.js';
 import { MailWorkerModule } from './modules/mail/mail-worker.module.js';
 import { MailModule } from './modules/mail/mail.module.js';
 import { ProfileModule } from './modules/profile/profile.module.js';
@@ -43,6 +45,11 @@ import { StorageModule } from './storage/storage.module.js';
     AdminModule,
     QuestionBankModule,
     ExamsModule,
+    JudgeModule,
+    ConditionalModule.registerWhen(
+      JudgeWorkerModule,
+      (env) => env.JUDGE_WORKER_ENABLED !== 'false',
+    ),
   ],
   providers: [
     // Order matters: authenticate first, then check roles.

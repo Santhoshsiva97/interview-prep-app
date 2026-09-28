@@ -142,12 +142,29 @@ users, the question bank, exams, payments, and ads.
   (Step 8 grading on `submitted`, Step 14 proctoring) subscribe there and append their own event types
 - Candidate payloads come from `candidateQuestion()` (`session-content.ts`): never send `isCorrect`,
   explanations or hidden test cases to candidates. Output comparison for test cases: `outputsMatch()`
-- Code execution goes through the `CODE_RUNNER` provider (`services/code-runner.ts`). Step 7 binds
-  `UnavailableCodeRunner` (or dev-only `LocalProcessCodeRunner` with `CODE_RUNNER=local`, refused in
-  production). **Step 8 binds the sandboxed judge in `exams.module.ts`**
+- Code execution and grading live in the judge module (next section); exams only mark a submitted attempt
+  `grading_status = pending` and emit `submitted`
 - Frontend runtime: `/exam/:sessionId` (full screen, outside the portal shell) driven by
   `features/exams/useExamRuntime.ts` (patch queue + localStorage backup + autosave heartbeat + local countdown
   re-anchored on each response). Monaco is bundled locally and lazy-loaded (`features/exams/components/CodeEditor.tsx`)
+
+### Evaluation & code judge (Step 8)
+- `modules/judge/`: everything slow runs on the BullMQ **`judge` queue** (`JudgeService.process`, consumed by
+  `JudgeProcessor` in `JudgeWorkerModule`, loaded when `JUDGE_WORKER_ENABLED`). Job ids dedupe: `<submissionId>` for
+  runs, `grade-<sessionId>` for grading. Results are delivered by **polling** (`GET /exam-sessions/:id/runs/:runId`,
+  and the session view's `grading` block). No WebSockets yet
+- Runners implement `CodeRunner` (`runners/`): **`Judge0CodeRunner`** (production sandbox, `CODE_RUNNER=judge0`),
+  `LocalProcessCodeRunner` (dev only), `UnavailableCodeRunner`. Runners report raw outcomes (ok/TLE/MLE/RE/CE/IE);
+  **verdicts are assigned by the judge** (`verdictFor` + `outputsMatch`), so every runner is compared the same way.
+  Throwing = transient (the job retries); `status: 'unavailable'` = permanent (don't retry)
+- Per-language limits: `LANGUAGES` / `effectiveLimits()` in `models/judging.ts` (time factor, extra memory, Judge0
+  language id). Change limits there, not in runners
+- Scoring is pure (`gradeMcq`, `gradeCoding`) and in **hundredths of a mark** (`score_centi` ints). MCQ: exact = full,
+  any wrong option = −negative %, clean subset of a multi-answer = partial (if allowed). Coding: passed test weight /
+  total (if partial allowed, else all-or-nothing), never negative. Grading reads the attempt's own item snapshot
+- Candidates only ever see **sample** test outputs; hidden-test verdicts/outputs are in `code_submissions.results` for
+  staff (`GET /admin/exam-sessions/:id/grading`). Admins can `POST /admin/exam-sessions/:id/regrade`
+- Grading lost to an outage is re-queued by `JudgeService.recover()` (runs with the exam sweeper interval)
 
 ### Frontend (React)
 - Routes are declared in `src/app/router.tsx`; unbuilt routes use `<ComingSoonPage title description>`
@@ -216,7 +233,9 @@ users, the question bank, exams, payments, and ads.
   src/queue/                   QueueModule (shared BullMQ connection)
   src/modules/question-bank/   questions/versions/workflow, taxonomy (topics, tags), bulk import
   src/modules/exams/           builder (/admin/exams), catalog (/exams), sessions (/exam-sessions): clock,
-                               lifecycle hooks, expiry sweeper, code runner
+                               lifecycle hooks, expiry sweeper
+  src/modules/judge/           judge queue (runs + grading), scoring, runners (Judge0, local, disabled),
+                               /exam-sessions/:id/runs, /admin/exam-sessions/:id/grading|regrade
   src/cli/                     promote-super-admin, seed-dev
   src/generated/prisma/        generated Prisma client (gitignored)
   test/                        e2e tests + test/utils (createTestApp, FakeRedis, FakeStorage, FakeQueue, CapturingTransport, fakeConfig)
@@ -227,7 +246,8 @@ users, the question bank, exams, payments, and ads.
   seed/questions.sample.json   dev seed (also a valid bulk-import file)
 /docs
   question-import-format.md    bulk-upload contract (Content Acquisition Tool)
-docker-compose.yml             postgres, redis, minio, mailpit, backend, frontend
+docker-compose.yml             postgres, redis, minio, mailpit, backend, frontend (+ Judge0 under profile `judge`)
+tools/judge0/judge0.conf       Judge0 settings for the compose profile
 README.md                      setup instructions
 PROJECT_CONTEXT.md             ← this file
 PROGRESS_LOG.md                ← running build log, read this every session

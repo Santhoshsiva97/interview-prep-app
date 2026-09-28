@@ -217,7 +217,12 @@ export interface SessionItem {
   response: ItemResponse | null;
   /** Null for locked sections and after submission. */
   question: RuntimeQuestion | null;
+  /** After grading. Scores are in marks (can be negative with negative marking). */
+  result: { outcome: ItemOutcome; score: number | null } | null;
 }
+
+export type ItemOutcome = 'correct' | 'partial' | 'incorrect' | 'unanswered';
+export type GradingStatus = 'pending' | 'grading' | 'graded' | 'failed';
 
 export interface SessionView {
   id: string;
@@ -249,6 +254,13 @@ export interface SessionView {
   serverTime: string;
   autosaveIntervalMs: number;
   totalMarks: number;
+  /** Null while the attempt is in progress. */
+  grading: {
+    status: GradingStatus;
+    score: number | null;
+    maxScore: number;
+    gradedAt: string | null;
+  } | null;
   items: SessionItem[];
 }
 
@@ -270,15 +282,25 @@ export interface SyncResult {
   rejected: { itemId: string; code: string; message: string }[];
 }
 
-export interface RunResult {
-  status: 'completed' | 'unavailable';
+export type TestVerdict = 'AC' | 'WA' | 'TLE' | 'MLE' | 'RE' | 'CE' | 'IE';
+
+/** A queued "Run" (sample tests only); poll until `completed` or `failed`. */
+export interface CodeRun {
+  id: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  language: Language;
+  verdict: TestVerdict | null;
+  passedCount: number | null;
+  totalCount: number | null;
+  compileOutput: string | null;
+  /** Why it couldn't run (judge unavailable, unsupported language…). */
   message: string | null;
   results: {
-    verdict:
-      'passed' | 'failed' | 'runtime_error' | 'time_limit' | 'unsupported';
+    verdict: TestVerdict;
+    timeMs: number | null;
+    memoryKb: number | null;
     stdout: string;
     stderr: string;
-    timeMs: number;
     input: string;
     expectedOutput: string;
   }[];
@@ -302,7 +324,9 @@ export const examsApi = {
   submit: (id: string, answers: AnswerPatch[], auto: boolean) =>
     apiPost<SyncResult>(`/exam-sessions/${id}/submit`, { answers, auto }),
   run: (id: string, itemId: string, language: Language, code: string) =>
-    apiPost<RunResult>(`/exam-sessions/${id}/run`, { itemId, language, code }),
+    apiPost<CodeRun>(`/exam-sessions/${id}/runs`, { itemId, language, code }),
+  getRun: (id: string, runId: string) =>
+    apiFetch<CodeRun>(`/exam-sessions/${id}/runs/${runId}`),
 };
 
 /** 1h 05m / 12:05 style countdown. */

@@ -572,3 +572,89 @@ grade on `submitted`.**
   connection" in e2e); `npx prisma dev stop interview-prep` + `start` fixed it. Browser tests used separate
   `@example.test` accounts (credentials in the gitignored `tools/local-dev/.env.test-accounts`) on
   `http://exam.localhost:5173` so the owner's signed-in session on `localhost` wasn't touched.
+
+---
+
+## 2026-09-28 — Step 8: Evaluation & Code Judge (FRD §4.7) ✅
+
+Branch `step-8-code-judge` (from `main` @ Step 7). The FRD still wasn't attached, so code cites "FRD §4.7" rather than
+FR-7.1…FR-7.8. Step 1 is still outstanding; this step added migration `20260928150000_code_judge`: grading columns on
+`exam_sessions` (`grading_status`, `score_centi`, `graded_at`, `grading_error`) and `exam_session_items` (`score_centi`,
+`outcome`, `graded_at`), plus `code_submissions` and enums `grading_status`, `item_outcome`, `test_verdict`,
+`code_submission_kind`, `code_submission_status`.
+
+**Languages supported end-to-end and the sandbox approach**
+- **Sandbox: Judge0 CE 1.13** (`CODE_RUNNER=judge0`). Each test case is one Judge0 submission (batched ≤ 20, base64,
+  polled). Judge0 runs code in `isolate` sandboxes with per-run CPU time, wall time, memory and stack limits and **no
+  network** (`enable_network: false`, `ALLOW_ENABLE_NETWORK=false`). It runs as separate services
+  (`docker compose --profile judge up`, config `tools/judge0/judge0.conf`, auth via `X-Auth-Token`). Output comparison
+  is ours, not Judge0's.
+- **With Judge0: Python 3, JavaScript (Node), Java and C++**, all four editor languages (Judge0 ids 71 / 63 / 62 / 54).
+  Java must declare `public class Main`. Per-language limits on top of each question's: Python ×3 time, JavaScript ×2
+  time + 64 MB, Java ×2 time + 128 MB, C++ as given; capped at 15 s / 512 MB.
+- **Without Docker (this machine):** `CODE_RUNNER=local` runs **JavaScript and Python** end to end (dev only, *not* a
+  sandbox, refused in production); Java/C++ report that they need the code judge. `CODE_RUNNER=disabled` (default) runs
+  nothing: MCQs are still graded, coding answers are reported as not gradable, and admins can regrade later.
+- **Honest status:** Judge0 itself has **not been run on this machine** (no Docker). The Judge0 client is unit-tested
+  against an in-memory fake that speaks Judge0's HTTP API (batching, polling, status mapping, auth header, limits,
+  errors/timeouts). Runs and grading were verified end to end in the browser with the local runner (Python). Judge0 1.13
+  needs privileged containers + **cgroup v1** (see README "Code judge").
+
+**How it works**
+- **Queue:** all execution runs on the BullMQ `judge` queue (worker `JudgeProcessor`, `JUDGE_WORKER_CONCURRENCY`, loaded
+  when `JUDGE_WORKER_ENABLED`). Requests never run code. "Run" returns **202** and the client **polls**
+  `GET /exam-sessions/:id/runs/:runId` every second; the submitted screen polls the attempt every 3 s until
+  `grading.status` is `graded`/`failed`. Jobs retry `JUDGE_MAX_ATTEMPTS` times with exponential backoff.
+- **Grading** is triggered by the Step 7 lifecycle hook (`submitted`: manual, timed out or abandoned) and deduplicated per
+  attempt (job id `grade-<session>` + a status claim). MCQs are graded against the pinned version's answer key with the
+  section's marking scheme; coding answers run against **sample + hidden** tests with per-test verdicts
+  **AC / WA / TLE / MLE / RE / CE / IE**. Scores are integers in hundredths of a mark.
+  - MCQ: exact = full marks; any wrong option = −negative % of the marks; a clean subset of a multi-answer question =
+    proportional credit if the section allows partial scoring (else wrong); unanswered = 0.
+  - Coding: marks × passed test **weight** / total weight with partial scoring, else all tests must pass; CE = 0; never
+    negative.
+  - MLE: Judge0 has no MLE status, so a crash with memory ≥ 95% of the limit (or an out-of-memory message) → MLE.
+- **Outages:** judge errors retry; after the last attempt the attempt is `failed` with the reason and MCQ scores kept.
+  "Judge unavailable" (disabled, unsupported language) fails at once without retrying. `recover()` re-queues attempts
+  left `pending` (queue down at submit) or stuck in `grading` (worker died). Admins: `POST /admin/exam-sessions/:id/regrade`.
+- **Privacy:** candidates only see sample tests' inputs/outputs. Hidden-test verdicts and truncated outputs are kept in
+  `code_submissions.results` for staff: `GET /admin/exam-sessions/:id/grading` (admin, support).
+
+**API** (`/api/v1`): `POST exam-sessions/:id/runs {itemId, language, code}` → 202 (replaces Step 7's synchronous `/run`) ·
+`GET exam-sessions/:id/runs/:runId` · `GET admin/exam-sessions/:id/grading` [admin, support] ·
+`POST admin/exam-sessions/:id/regrade` [admin] → 202. Session views gain `grading { status, score, maxScore, gradedAt }`
+and, once graded, per-item `result { outcome, score }`. New error codes: `JUDGE_UNAVAILABLE` (503, queue down),
+`RUN_NOT_FOUND`, `SESSION_NOT_SUBMITTED`; `RUN_COOLDOWN` moved here. New env: `CODE_RUNNER` gains `judge0` (production
+allows `disabled|judge0`), `JUDGE0_URL` (required for judge0), `JUDGE0_AUTH_HEADER` (X-Auth-Token), `JUDGE0_AUTH_TOKEN`,
+`JUDGE0_TIMEOUT_SECONDS` (60), `JUDGE_WORKER_ENABLED` (true), `JUDGE_WORKER_CONCURRENCY` (4), `JUDGE_MAX_ATTEMPTS` (3),
+`JUDGE_RETRY_BASE_DELAY_MS` (5000).
+
+**Frontend:** Run shows "Running…" while polling, then per-example verdicts with time/memory, or the compiler output for
+CE. The submitted screen shows "Grading your answers…", then **score / max** and how many questions were fully correct
+(the full scorecard is Step 9).
+
+**Verified**
+- Backend: typecheck 0, lint, prettier. **93 unit tests** (new: verdict mapping, overall verdict, per-language limits,
+  MCQ/coding scoring incl. negative/partial/rounding, Judge0 client vs a fake Judge0, local runner). **53 e2e tests** (new
+  judge suite, 7): queued run → poll → sample-only results + language limits, CE output, cooldown/ownership/MCQ guard;
+  judge down → 3 attempts → failed; queue down → 503; grading math end to end (+2 −0.5 + 10×¾ = 9) with hidden verdicts
+  for staff only; no partial credit / unanswered / CE; outage → failed with MCQs kept → admin regrade; judge disabled +
+  timed-out attempt graded via the sweep; retry takeover of a stuck `grading`. Frontend: lint, prettier, build.
+- Browser (local runner, Python): Run → 202 → one poll → 2/2 samples passed; submit → "Grading…" → **6.75 / 29**; after
+  the seed fix below and an admin regrade → **10 / 29**, all 4 tests (2 hidden) AC in the staff report.
+- **Found while testing:**
+  1. **Seed data bug:** "Pair with target sum" hidden test `5 -8 / -1 -3 -5 4 -3` had two valid answers ((1,2) and
+     (2,4)) but only accepted `2 4`, so correct solutions lost marks. Fixed to `-1 -3 -6 4 -2` (unique answer). The seed
+     re-publishes it as v2, and the seeded mock test was re-saved to pin v2. Earlier attempts keep v1 by design.
+  2. A grading job whose status reset failed (local DB hiccup) left the attempt stuck in `grading` until recovery.
+     Retries of the same job may now re-claim it (e2e covered).
+- **Not verified:** a real Judge0 instance, real Redis/BullMQ (still no Docker/Redis here).
+
+**Notes for next steps**
+- Step 9 (scorecards): read `exam_sessions.score_centi` / `grading_status` and per-item `outcome` / `score_centi`; coding
+  details from the latest `code_submissions` row with `kind = 'grade'` (show candidates **sample** results only). Totals
+  can be negative with negative marking; decide whether scorecards floor them at 0.
+- Step 10 (analytics): `code_submissions` has per-test time/memory for performance stats.
+- Step 13 (audit log): hook `JudgeService.regrade` (the actor is an admin).
+- Production: run Judge0 on dedicated hosts (privileged containers) and set `JUDGE_WORKER_ENABLED=false` on API-only
+  instances once separate workers exist. WebSockets could replace polling later without changing the endpoints.

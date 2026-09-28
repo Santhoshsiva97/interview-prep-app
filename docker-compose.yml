@@ -87,6 +87,10 @@ services:
       SMTP_PORT: 1025
       SMTP_SECURE: 'false'
       APP_BASE_URL: http://localhost:5173
+      # Code judge (FRD §4.7). With `--profile judge`, set CODE_RUNNER=judge0 in the root .env.
+      CODE_RUNNER: ${CODE_RUNNER:-disabled}
+      JUDGE0_URL: http://judge0-server:2358
+      JUDGE0_AUTH_TOKEN: ${JUDGE0_AUTH_TOKEN:-dev-judge0-token}
       # Poll for file changes — fs events don't cross Windows/macOS bind mounts.
       TSC_WATCHFILE: DynamicPriorityPolling
     ports:
@@ -122,7 +126,47 @@ services:
     depends_on:
       - backend
 
+  # ── Code judge: Judge0 CE (opt-in: docker compose --profile judge up) ──
+  # Sandboxed execution (isolate) for Python, JavaScript, Java and C++. Needs
+  # privileged containers and cgroup v1 (see README "Code judge").
+  judge0-server:
+    image: judge0/judge0:1.13.1
+    profiles: [judge]
+    env_file: tools/judge0/judge0.conf
+    privileged: true
+    ports:
+      - '${JUDGE0_PORT:-2358}:2358'
+    depends_on:
+      - judge0-db
+      - judge0-redis
+
+  judge0-workers:
+    image: judge0/judge0:1.13.1
+    profiles: [judge]
+    command: ['./scripts/workers']
+    env_file: tools/judge0/judge0.conf
+    privileged: true
+    depends_on:
+      - judge0-db
+      - judge0-redis
+
+  judge0-db:
+    image: postgres:16-alpine
+    profiles: [judge]
+    environment:
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0-dev
+    volumes:
+      - judge0db:/var/lib/postgresql/data
+
+  judge0-redis:
+    image: redis:7-alpine
+    profiles: [judge]
+    command: ['redis-server', '--appendonly', 'no', '--requirepass', 'judge0-dev']
+
 volumes:
+  judge0db:
   pgdata:
   redisdata:
   miniodata:

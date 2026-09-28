@@ -28,34 +28,36 @@ export class CapturingTransport implements MailTransport {
   }
 }
 
-interface QueuedJob {
-  data: MailJob;
+interface QueuedJob<T> {
+  data: T;
   opts: JobsOptions;
 }
 
-type Process = (job: {
-  data: MailJob;
+type Process<T> = (job: {
+  data: T;
   opts: JobsOptions;
   attemptsMade: number;
 }) => Promise<void>;
 
 /**
- * In-memory stand-in for the BullMQ `mail` queue. `drain()` runs queued jobs
- * through the real MailProcessor, retrying up to `opts.attempts` (no delays).
+ * In-memory stand-in for a BullMQ queue. `drain()` runs queued jobs through
+ * the real processor, retrying up to `opts.attempts` (no delays). Like
+ * BullMQ, adding a job whose `jobId` is already waiting is a no-op.
  */
-export class FakeQueue {
-  readonly jobs: QueuedJob[] = [];
-  private processor?: Process;
+export class FakeQueue<T = MailJob> {
+  readonly jobs: QueuedJob<T>[] = [];
+  private processor?: Process<T>;
   failAdd = false;
 
-  add(_name: string, data: MailJob, opts: JobsOptions) {
+  add(_name: string, data: T, opts: JobsOptions) {
     if (this.failAdd)
       return Promise.reject(new Error('Redis connection is closed'));
-    this.jobs.push({ data, opts });
+    if (!opts.jobId || !this.jobs.some((j) => j.opts.jobId === opts.jobId))
+      this.jobs.push({ data, opts });
     return Promise.resolve({ id: opts.jobId });
   }
 
-  useProcessor(process: Process) {
+  useProcessor(process: Process<T>) {
     this.processor = process;
   }
 

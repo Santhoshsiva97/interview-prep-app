@@ -16,7 +16,6 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator.j
 import type { AuthUser } from '../../../common/types/auth-user.js';
 import {
   CatalogQueryDto,
-  RunCodeDto,
   SaveSessionDto,
   StartSessionDto,
   SubmitSessionDto,
@@ -112,16 +111,5 @@ export class ExamSessionsController {
     @Body() dto: SubmitSessionDto,
   ) {
     return this.sessions.submit(user, id, dto);
-  }
-
-  /** Runs code against the question's sample test cases (not graded). */
-  @Post(':id/run')
-  @HttpCode(HttpStatus.OK)
-  run(
-    @CurrentUser() user: AuthUser,
-    @Id() id: string,
-    @Body() dto: RunCodeDto,
-  ) {
-    return this.sessions.run(user, id, dto);
   }
 }

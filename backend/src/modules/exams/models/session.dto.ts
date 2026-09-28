@@ -6,16 +6,12 @@ import {
   IsIn,
   IsInt,
   IsOptional,
-  IsString,
   IsUUID,
   Max,
-  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
 import { ExamKind } from '../../../generated/prisma/enums.js';
-import { CODING_LANGUAGES } from '../../question-bank/models/question-content.js';
-import { SOURCE_MAX_BYTES } from './session-content.js';
 
 /** POST /exams/:id/sessions */
 export class StartSessionDto {
@@ -66,19 +62,6 @@ export class SubmitSessionDto extends SaveSessionDto {
   @IsOptional()
   @IsBoolean()
   auto?: boolean;
-}
-
-/** POST /exam-sessions/:id/run */
-export class RunCodeDto {
-  @IsUUID()
-  itemId: string;
-
-  @IsIn(CODING_LANGUAGES)
-  language: (typeof CODING_LANGUAGES)[number];
-
-  @IsString()
-  @MaxLength(SOURCE_MAX_BYTES)
-  code: string;
 }
 
 /** GET /exams */

@@ -1,7 +1,7 @@
 /**
  * Exam engine (FRD §4.6) against a real Postgres: builder + publish rules,
  * catalog, consent, autosave/resume, the server clock (pause vs strict,
- * timed sections), submit, the expiry sweep and code runs. Runs only with
+ * timed sections), submit and the expiry sweep. Runs only with
  * E2E_DATABASE_URL.
  */
 import type { INestApplication } from '@nestjs/common';
@@ -729,34 +729,5 @@ describe.skipIf(!DB_URL)('Exam engine (e2e)', () => {
       'admin',
       http().post(`/api/v1/admin/exams/${examId}/archive`),
     ).expect(200);
-  });
-
-  it('run: sample cases only, coding questions only, with a cooldown (runner disabled by default)', async () => {
-    const examId = await publishedExam({ title: `${PREFIX} Run` });
-    const id = await start(examId);
-    const s = await resume(id);
-    const code = s.items.find((i: { type: string }) => i.type === 'coding');
-    const mcq = s.items.find((i: { type: string }) => i.type === 'mcq');
-
-    const run = await as(
-      'candidate',
-      http().post(`/api/v1/exam-sessions/${id}/run`),
-    )
-      .send({ itemId: code.id, language: 'python', code: 'print(input())' })
-      .expect(200);
-    expect(run.body).toMatchObject({ status: 'unavailable', results: [] });
-    expect(run.body.message).toMatch(/isn’t available/);
-
-    await as('candidate', http().post(`/api/v1/exam-sessions/${id}/run`))
-      .send({ itemId: code.id, language: 'python', code: 'x' })
-      .expect(429)
-      .expect(({ body }) => expect(body.code).toBe('RUN_COOLDOWN'));
-    await as('candidate', http().post(`/api/v1/exam-sessions/${id}/run`))
-      .send({ itemId: mcq.id, language: 'python', code: 'x' })
-      .expect(400)
-      .expect(({ body }) => expect(body.code).toBe('NOT_CODING_QUESTION'));
-    await as('candidate', http().post(`/api/v1/exam-sessions/${id}/run`))
-      .send({ itemId: code.id, language: 'ruby', code: 'x' })
-      .expect(400);
   });
 });

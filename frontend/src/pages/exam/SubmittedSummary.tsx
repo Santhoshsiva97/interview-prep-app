@@ -1,7 +1,12 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Icon } from '../../components/icons/Icon';
 import btn from '../../components/ui/Button.module.css';
-import type { SessionItem, SessionView } from '../../features/exams/api';
+import {
+  examsApi,
+  type SessionItem,
+  type SessionView,
+} from '../../features/exams/api';
 import styles from './ExamRuntime.module.css';
 
 const REASON: Record<string, string> = {
@@ -11,14 +16,34 @@ const REASON: Record<string, string> = {
     'This attempt was left unfinished for too long, so it was submitted automatically.',
 };
 
-/** Shown once an attempt is closed. Scores arrive with grading (Step 8/9). */
+const POLL_MS = 3000;
+
+const marks = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+
+/**
+ * Shown once an attempt is closed. Grading runs in the background (FRD §4.7),
+ * so this polls until the score is ready. The full scorecard is Step 9.
+ */
 export function SubmittedSummary({
-  session,
-  items,
+  session: initial,
+  items: initialItems,
 }: {
   session: SessionView;
   items: SessionItem[];
 }) {
+  const [session, setSession] = useState(initial);
+  const status = session.grading?.status;
+  const waiting = status === 'pending' || status === 'grading';
+
+  useEffect(() => {
+    if (!waiting) return;
+    const id = window.setTimeout(() => {
+      examsApi.view(session.id).then(setSession, () => undefined);
+    }, POLL_MS);
+    return () => window.clearTimeout(id);
+  }, [waiting, session]);
+
+  const items = session === initial ? initialItems : session.items;
   const answered = items.filter((i) => i.answered).length;
   const minutes =
     session.submittedAt &&
@@ -30,6 +55,9 @@ export function SubmittedSummary({
           60_000,
       ),
     );
+  const grading = session.grading;
+  const correct = items.filter((i) => i.result?.outcome === 'correct').length;
+
   return (
     <div className={styles.centered}>
       <div className={styles.doneCard}>
@@ -40,6 +68,28 @@ export function SubmittedSummary({
         <p className={styles.muted}>
           {REASON[session.submitReason ?? 'manual']}
         </p>
+
+        <div className={styles.scoreBox} aria-live="polite">
+          {grading?.status === 'graded' && grading.score !== null ? (
+            <>
+              <span>Your score</span>
+              <strong>
+                {marks(grading.score)} <small>/ {grading.maxScore}</small>
+              </strong>
+              <span>
+                {correct} of {items.length} questions fully correct
+              </span>
+            </>
+          ) : grading?.status === 'failed' ? (
+            <span>
+              We couldn’t finish grading your answers yet. We’ll try again, and
+              your score will appear in History & Scorecards.
+            </span>
+          ) : (
+            <span aria-busy="true">Grading your answers…</span>
+          )}
+        </div>
+
         <dl className={styles.doneStats}>
           <div>
             <dt>Test</dt>
@@ -62,10 +112,6 @@ export function SubmittedSummary({
             <dd>#{session.attemptNumber}</dd>
           </div>
         </dl>
-        <p className={styles.muted}>
-          Your answers have been recorded. Your score will appear in History &
-          Scorecards once it has been graded.
-        </p>
         <div className={styles.doneActions}>
           <Link to="/tests" className={btn.primary}>
             Back to tests

@@ -1,9 +1,17 @@
-import { lazy, Suspense, useState, type ReactNode } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import btn from '../../components/ui/Button.module.css';
 import {
   examsApi,
   type CodingResponse,
-  type RunResult,
+  type CodeRun,
+  type TestVerdict,
   type RuntimeQuestion,
   type SessionItem,
 } from '../../features/exams/api';
@@ -17,13 +25,20 @@ const CodeEditor = lazy(
 
 type CodingQuestion = Extract<RuntimeQuestion, { coding: unknown }>;
 
-const VERDICT_LABEL: Record<RunResult['results'][number]['verdict'], string> = {
-  passed: 'Passed',
-  failed: 'Wrong output',
-  runtime_error: 'Runtime error',
-  time_limit: 'Time limit exceeded',
-  unsupported: 'Can’t run',
+const VERDICT_LABEL: Record<TestVerdict, string> = {
+  AC: 'Passed',
+  WA: 'Wrong answer',
+  TLE: 'Time limit exceeded',
+  MLE: 'Memory limit exceeded',
+  RE: 'Runtime error',
+  CE: 'Compilation error',
+  IE: 'Judge error',
 };
+
+/** Runs are queued on the server (FRD §4.7); poll until they finish. */
+const POLL_MS = 1000;
+const POLL_TIMEOUT_MS = 90_000;
+const done = (r: CodeRun) => r.status === 'completed' || r.status === 'failed';
 
 /** Problem statement + Monaco editor + "Run on sample tests" (FRD §4.6). */
 export function CodingPanel({
@@ -50,9 +65,16 @@ export function CodingPanel({
       coding.languages.find((l) => coding.starterCode[l]) ??
       coding.languages[0],
   );
-  const [run, setRun] = useState<RunResult | null>(null);
+  const [run, setRun] = useState<CodeRun | null>(null);
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState('');
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   const sources = saved?.sources ?? {};
   const code = sources[language] ?? coding.starterCode[language] ?? '';
@@ -76,8 +98,21 @@ export function CodingPanel({
   async function runSamples() {
     setRunning(true);
     setRunError('');
+    setRun(null);
     try {
-      setRun(await examsApi.run(sessionId, item.id, language, code));
+      let r = await examsApi.run(sessionId, item.id, language, code);
+      const until = Date.now() + POLL_TIMEOUT_MS;
+      while (!done(r) && alive.current) {
+        if (Date.now() > until) {
+          setRunError(
+            'The run is taking longer than usual. Try again in a moment.',
+          );
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        r = await examsApi.getRun(sessionId, r.id);
+      }
+      if (alive.current) setRun(r);
     } catch (err) {
       setRunError(
         err instanceof ApiError && err.code === 'RUN_COOLDOWN'
@@ -169,7 +204,7 @@ export function CodingPanel({
   );
 }
 
-function RunOutput({ run, error }: { run: RunResult | null; error: string }) {
+function RunOutput({ run, error }: { run: CodeRun | null; error: string }) {
   if (error)
     return (
       <div className={styles.runPanel} role="alert">
@@ -177,29 +212,33 @@ function RunOutput({ run, error }: { run: RunResult | null; error: string }) {
       </div>
     );
   if (!run) return null;
-  if (run.status === 'unavailable' || run.results.length === 0)
+  if (run.status === 'failed')
     return (
       <div className={styles.runPanel} role="status">
-        {run.message ?? 'Nothing to run.'}
+        {run.message ?? 'This run couldn’t be completed. Please try again.'}
       </div>
     );
-  const passed = run.results.filter((r) => r.verdict === 'passed').length;
+  if (run.verdict === 'CE')
+    return (
+      <div className={styles.runPanel} role="status">
+        <strong data-verdict="CE">Compilation error</strong>
+        {run.compileOutput && (
+          <pre className={styles.stderr}>{run.compileOutput}</pre>
+        )}
+      </div>
+    );
   return (
     <div className={styles.runPanel} role="status">
       <strong>
-        {passed} / {run.results.length} sample tests passed
+        {run.passedCount} / {run.totalCount} sample tests passed
       </strong>
-      {run.message && <p className={styles.muted}>{run.message}</p>}
       {run.results.map((r, i) => (
-        <details
-          key={i}
-          className={styles.runCase}
-          open={r.verdict !== 'passed'}
-        >
+        <details key={i} className={styles.runCase} open={r.verdict !== 'AC'}>
           <summary>
             Example {i + 1}:{' '}
             <span data-verdict={r.verdict}>{VERDICT_LABEL[r.verdict]}</span>
-            {r.verdict !== 'unsupported' && ` · ${r.timeMs} ms`}
+            {r.timeMs !== null && ` · ${r.timeMs} ms`}
+            {r.memoryKb !== null && ` · ${Math.round(r.memoryKb / 1024)} MB`}
           </summary>
           <div className={styles.ioGrid}>
             <div>

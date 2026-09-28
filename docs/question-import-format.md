@@ -108,6 +108,14 @@ time_limit_ms,memory_limit_mb,starter_code,test_cases
 Quote any cell containing commas, quotes or newlines (standard RFC 4180: `"a ""quoted"" word"`).
 CSV suits MCQs; for coding questions JSON is easier to produce.
 
+## How coding answers are judged
+
+(Compatible addition, Step 8.) Candidate programs read the test case's `input` from **stdin** and write to **stdout**.
+Output is compared with `expectedOutput` after normalising line endings and ignoring trailing whitespace on each line and
+trailing blank lines. Every test case (sample and hidden) runs with the question's `timeLimitMs` / `memoryLimitMb`, scaled
+per language (Python ×3 time, JavaScript ×2 time + 64 MB, Java ×2 time + 128 MB, C++ as given; capped at 15 s / 512 MB).
+Java code must declare `public class Main`. `weight` sets each test's share of the marks when the exam allows partial credit.
+
 ## Response (`201`)
 
 ```jsonc

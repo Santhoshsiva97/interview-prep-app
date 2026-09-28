@@ -83,6 +83,7 @@ model User {
   examsUpdated       Exam[]            @relation("ExamUpdater")
   examsPublished     Exam[]            @relation("ExamPublisher")
   examSessions       ExamSession[]
+  codeSubmissions    CodeSubmission[]
 
   @@index([role])
   @@index([status])
@@ -517,6 +518,12 @@ model ExamSession {
   lastSyncedAt        DateTime          @map("last_synced_at") @db.Timestamptz(6)
   submittedAt         DateTime?         @map("submitted_at") @db.Timestamptz(6)
   submitReason        ExamSubmitReason? @map("submit_reason")
+  /// Set to `pending` on submit; the judge worker grades it (FRD §4.7).
+  gradingStatus       GradingStatus?    @map("grading_status")
+  /// Total score in hundredths of a mark (can be negative with negative marking).
+  scoreCenti          Int?              @map("score_centi")
+  gradedAt            DateTime?         @map("graded_at") @db.Timestamptz(6)
+  gradingError        String?           @map("grading_error") @db.VarChar(1000)
   /// Exam settings and sections as they were at start: { settings, sections[] }.
   snapshot            Json
   totalMarks          Int               @map("total_marks")
@@ -524,10 +531,11 @@ model ExamSession {
   updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt           DateTime?         @map("deleted_at") @db.Timestamptz(6)
 
-  exam   Exam               @relation(fields: [examId], references: [id], onDelete: Restrict)
-  user   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items  ExamSessionItem[]
-  events ExamSessionEvent[]
+  exam            Exam               @relation(fields: [examId], references: [id], onDelete: Restrict)
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items           ExamSessionItem[]
+  codeSubmissions CodeSubmission[]
+  events          ExamSessionEvent[]
 
   @@unique([userId, examId, attemptNumber])
   @@index([userId, status])
@@ -557,13 +565,18 @@ model ExamSessionItem {
   visitedAt           DateTime?    @map("visited_at") @db.Timestamptz(6)
   answeredAt          DateTime?    @map("answered_at") @db.Timestamptz(6)
   timeSpentMs         Int          @default(0) @map("time_spent_ms")
+  /// Grading result: score in hundredths of a mark, and how the answer fared.
+  scoreCenti          Int?         @map("score_centi")
+  outcome             ItemOutcome?
+  gradedAt            DateTime?    @map("graded_at") @db.Timestamptz(6)
   createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt           DateTime?    @map("deleted_at") @db.Timestamptz(6)
 
-  session         ExamSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  question        Question        @relation(fields: [questionId], references: [id], onDelete: Restrict)
-  questionVersion QuestionVersion @relation("SessionItemVersion", fields: [questionVersionId], references: [id], onDelete: Restrict)
+  session         ExamSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  codeSubmissions CodeSubmission[]
+  question        Question         @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  questionVersion QuestionVersion  @relation("SessionItemVersion", fields: [questionVersionId], references: [id], onDelete: Restrict)
 
   @@unique([sessionId, sectionIndex, position])
   @@map("exam_session_items")
@@ -584,4 +597,96 @@ model ExamSessionEvent {
 
   @@index([sessionId, createdAt])
   @@map("exam_session_events")
+}
+
+// ───────────────────────────── Evaluation & Judge ─────────────────────────────
+// FRD §4.7. Built ahead of Step 1: reconcile with the Database Module Design Document.
+
+enum GradingStatus {
+  pending
+  grading
+  graded
+  failed
+
+  @@map("grading_status")
+}
+
+enum ItemOutcome {
+  correct
+  partial
+  incorrect
+  unanswered
+
+  @@map("item_outcome")
+}
+
+/// Per-test-case / overall verdict: Accepted, Wrong Answer, Time/Memory Limit
+/// Exceeded, Runtime Error, Compilation Error, Internal (judge) Error.
+enum TestVerdict {
+  AC
+  WA
+  TLE
+  MLE
+  RE
+  CE
+  IE
+
+  @@map("test_verdict")
+}
+
+enum CodeSubmissionKind {
+  /// Candidate pressed "Run": sample tests only, not graded.
+  run
+  /// Grading a submitted answer: sample + hidden tests.
+  grade
+
+  @@map("code_submission_kind")
+}
+
+enum CodeSubmissionStatus {
+  queued
+  running
+  completed
+  failed
+
+  @@map("code_submission_status")
+}
+
+/// One execution of candidate code against a question's test cases.
+model CodeSubmission {
+  id            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId     String               @map("session_id") @db.Uuid
+  sessionItemId String               @map("session_item_id") @db.Uuid
+  userId        String               @map("user_id") @db.Uuid
+  kind          CodeSubmissionKind
+  status        CodeSubmissionStatus @default(queued)
+  language      String               @db.VarChar(20)
+  source        String               @db.Text
+  /// Overall verdict: AC only if every test passed, else the first failing test's verdict.
+  verdict       TestVerdict?
+  passedCount   Int?                 @map("passed_count")
+  totalCount    Int?                 @map("total_count")
+  passedWeight  Int?                 @map("passed_weight")
+  totalWeight   Int?                 @map("total_weight")
+  compileOutput String?              @map("compile_output") @db.Text
+  /// Per test case: [{ index, isSample, verdict, timeMs, memoryKb, stdout, stderr }] (outputs truncated).
+  /// Hidden-test outputs are for staff only; candidates only ever see sample outputs.
+  results       Json?
+  /// Why it couldn't be judged (judge down, unsupported language…).
+  error         String?              @db.VarChar(1000)
+  attempts      Int                  @default(0)
+  startedAt     DateTime?            @map("started_at") @db.Timestamptz(6)
+  finishedAt    DateTime?            @map("finished_at") @db.Timestamptz(6)
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime?            @map("deleted_at") @db.Timestamptz(6)
+
+  session     ExamSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionItem ExamSessionItem @relation(fields: [sessionItemId], references: [id], onDelete: Cascade)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, kind])
+  @@index([sessionItemId, createdAt])
+  @@index([status])
+  @@map("code_submissions")
 }

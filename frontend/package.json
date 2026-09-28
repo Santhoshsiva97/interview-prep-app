@@ -13,8 +13,11 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "monaco-editor": "^0.57.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-markdown": "^10.1.0",
     "react-router": "^8.4.0"
   },
   "devDependencies": {

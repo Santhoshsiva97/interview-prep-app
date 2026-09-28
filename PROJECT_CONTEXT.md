@@ -125,6 +125,30 @@ users, the question bank, exams, payments, and ads.
 - Dev data: `npm --prefix backend run build && npm --prefix backend run seed:dev` (idempotent; loads
   `db/seed/questions.sample.json`: 10 topics, 16 tags, 12 published questions)
 
+### Exams & sessions (Step 7)
+- Structure: `exams → exam_sections (marking scheme, optional time limit) → exam_items` (question + pinned
+  `question_version_id`, re-pinned to the live version on every save/publish). Editors build drafts; admins
+  publish/unpublish/archive/restore and are the only ones who can change a published exam
+- An attempt (`exam_sessions`) is **self-contained**: at start it copies the exam's settings/sections into
+  `snapshot` and its questions into `exam_session_items` (version, marks, negative %, option order). **Grading,
+  scorecards and proctoring read the session, never the live exam.** Answers: MCQ `{ optionIds }`, coding
+  `{ language, sources: { [language]: code } }` (graded source = `sources[language]`)
+- **Server-authoritative clock** (`modules/exams/models/exam-clock.ts`): every contact (resume, autosave,
+  submit) charges the time since `last_synced_at` via `tick()` inside a row-locked transaction. Pause-on-
+  disconnect exams charge at most `EXAM_OFFLINE_GRACE_SECONDS` for a gap; strict exams charge it all. Never
+  compute remaining time on the client except for display
+- **Lifecycle hooks**: every state change writes an `exam_session_events` row and, after commit, emits to
+  `ExamSessionLifecycle.subscribe()` (`started`, `resumed`, `section_advanced`, `submitted`). Later modules
+  (Step 8 grading on `submitted`, Step 14 proctoring) subscribe there and append their own event types
+- Candidate payloads come from `candidateQuestion()` (`session-content.ts`): never send `isCorrect`,
+  explanations or hidden test cases to candidates. Output comparison for test cases: `outputsMatch()`
+- Code execution goes through the `CODE_RUNNER` provider (`services/code-runner.ts`). Step 7 binds
+  `UnavailableCodeRunner` (or dev-only `LocalProcessCodeRunner` with `CODE_RUNNER=local`, refused in
+  production). **Step 8 binds the sandboxed judge in `exams.module.ts`**
+- Frontend runtime: `/exam/:sessionId` (full screen, outside the portal shell) driven by
+  `features/exams/useExamRuntime.ts` (patch queue + localStorage backup + autosave heartbeat + local countdown
+  re-anchored on each response). Monaco is bundled locally and lazy-loaded (`features/exams/components/CodeEditor.tsx`)
+
 ### Frontend (React)
 - Routes are declared in `src/app/router.tsx`; unbuilt routes use `<ComingSoonPage title description>`
 - Three layouts: `AppLayout` (public site + auth screens), `PortalLayout` (candidate portal) and
@@ -153,7 +177,7 @@ users, the question bank, exams, payments, and ads.
 /frontend                      React + Vite app
   src/app/router.tsx           route table
   src/components/layout/       AppLayout (public), AppShell, PortalLayout, AdminLayout, portalNav
-  src/components/ui/           Dialog, Button styles
+  src/components/ui/           Dialog, Button styles, Markdown (safe renderer)
   src/components/form/         FormField, TextAreaField, FormAlert
   src/components/icons/        Icon (inline SVG set)
   src/pages/                   route-level pages (Home, ComingSoon, NotFound, Error)
@@ -161,6 +185,10 @@ users, the question bank, exams, payments, and ads.
   src/pages/portal/            Dashboard, Profile
   src/pages/admin/             AdminDashboard, AdminUsers, AdminUserDetail, AdminStaff, AdminEmail, Taxonomy
   src/pages/admin/questions/   QuestionsList, QuestionEditor (MCQ + coding, workflow, history), QuestionImport
+  src/pages/admin/exams/       ExamsList, ExamBuilder (sections, marking, question picker, publish)
+  src/pages/portal/tests/      Tests catalog, TestInstructions (pre-test consent)
+  src/pages/exam/              ExamRuntime (MCQ/coding panels, palette, timers, submit), SubmittedSummary
+  src/features/exams/          exams API client/types, builder form model, useExamRuntime, CodeEditor (Monaco), QuestionPicker
   src/features/questions/      question-bank API client/types, editor form model, badges
   src/features/admin/          admin API client + types, role/status badges
   src/features/auth/           AuthProvider/useAuth, RequireAuth, auth API client, AuthCard
@@ -187,6 +215,8 @@ users, the question bank, exams, payments, and ads.
                                EmailOtpSender, /admin/mail (delivery log + previews)
   src/queue/                   QueueModule (shared BullMQ connection)
   src/modules/question-bank/   questions/versions/workflow, taxonomy (topics, tags), bulk import
+  src/modules/exams/           builder (/admin/exams), catalog (/exams), sessions (/exam-sessions): clock,
+                               lifecycle hooks, expiry sweeper, code runner
   src/cli/                     promote-super-admin, seed-dev
   src/generated/prisma/        generated Prisma client (gitignored)
   test/                        e2e tests + test/utils (createTestApp, FakeRedis, FakeStorage, FakeQueue, CapturingTransport, fakeConfig)

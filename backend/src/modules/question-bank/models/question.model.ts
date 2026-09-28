@@ -45,6 +45,11 @@ export class ListQuestionsQueryDto {
   @IsUUID()
   tagId?: string;
 
+  /** Only questions with a live (published) version, e.g. for the exam builder's picker. */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  live?: 'true' | 'false';
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

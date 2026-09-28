@@ -9,6 +9,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
+import { ExamsModule } from './modules/exams/exams.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { MailWorkerModule } from './modules/mail/mail-worker.module.js';
 import { MailModule } from './modules/mail/mail.module.js';
@@ -41,6 +42,7 @@ import { StorageModule } from './storage/storage.module.js';
     DashboardModule,
     AdminModule,
     QuestionBankModule,
+    ExamsModule,
   ],
   providers: [
     // Order matters: authenticate first, then check roles.

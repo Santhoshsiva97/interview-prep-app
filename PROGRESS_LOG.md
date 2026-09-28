@@ -470,3 +470,105 @@ were never attached; tables were added per step), then Step 7 (Virtual Interview
 - Dev accounts in the local DB (passwords are in the owner's hands, not recorded here): super admins `sandysanthosh24997@gmail.com`
   (owner) and `s3check@example.test` (test); editor `divya.editor@example.test`; candidates `nisha.kapoor@example.test` and
   sample `*@example.test` users (Meera Iyer is suspended as sample data).
+
+---
+
+## 2026-09-28 — Step 7: Virtual Interview & Exam Engine (FRD §4.6) ✅
+
+Branch `step-7-exam-engine` (from `step-6-question-bank`). The FRD still wasn't attached, so code cites "FRD §4.6"
+rather than individual FR-6.1…FR-6.8 numbers. Tag them once the FRD is available. Step 1 is still outstanding; this
+step added its own tables (migration `20260928120000_exam_engine`): `exams`, `exam_sections`, `exam_items`,
+`exam_sessions`, `exam_session_items`, `exam_session_events` + enums `exam_kind`, `exam_status`,
+`exam_session_status`, `exam_submit_reason`.
+
+**Session-resume mechanism (for Step 14 Proctoring and later modules).** The server owns the clock. Each
+`exam_sessions` row stores `time_remaining_ms` (plus `section_remaining_ms`) as of `last_synced_at`, and every client
+contact (resume on page load, autosave every `EXAM_AUTOSAVE_INTERVAL_SECONDS`, submit) charges the elapsed time in a
+row-locked transaction and saves answers. A reconnecting client calls `POST /exam-sessions/:id/resume` and gets back
+the saved answers and remaining time, and on pause-on-disconnect exams any gap beyond `EXAM_OFFLINE_GRACE_SECONDS`
+isn't charged. Lifecycle hooks: every transition is written to `exam_session_events` (`started`, `resumed` =
+reconnect after a gap, with `gapMs`/`chargedMs`, `section_advanced`, `submitted` + reason) and emitted after commit
+via `ExamSessionLifecycle.subscribe()`. **Step 14 should subscribe there and append its own event types; Step 8 should
+grade on `submitted`.**
+
+**What's built**
+| Area | Status |
+|---|---|
+| Admin builder `/admin/exams`, `/admin/exams/new`, `/admin/exams/:id` (replaces the Step 4 placeholder) | **Functional**: mock test / virtual interview; instructions (Markdown + preview); total time or per-section timers; pause-on-disconnect toggle; shuffle questions/options; attempts limit; pass mark; sections with marks-per-question override, negative marking %, partial credit; question picker (published questions only, search/type/topic/difficulty); reorder/remove; server problems shown on the section/question they belong to; publish checklist; publish/unpublish/archive/restore (admin), delete untouched drafts |
+| Catalog `/tests` (+ public `/exams`, `/interviews` redirect there) | **Functional**: cards with duration/questions/marks, attempts used, Resume / Try again; recent attempts list |
+| Pre-test `/tests/:id` | **Functional**: facts, section table (marks, timing, penalties), instructions, "how this test works", consent checkbox required to start |
+| Runtime `/exam/:sessionId` (full screen) | **Functional**: MCQ (single/multi) with clear answer; mark for review; palette with states + legend; section + total timers (warning/danger tones); coding: Monaco (bundled, lazy-loaded), language selector with per-language drafts, reset, **Run sample tests**; autosave + offline banner + local backup; submit / finish-section confirmation with counts; auto-submit at zero; submitted summary |
+| Code runner | `CODE_RUNNER=disabled` (default): Run explains it's unavailable. `CODE_RUNNER=local` (dev only, refused in production): JavaScript + Python as child processes with a time limit. **Not a sandbox.** Java/C++ → "unsupported". **STEP 8 HOOK:** bind the judge to `CODE_RUNNER` in `exams.module.ts` |
+
+**Rules and design decisions**
+- **Versions are pinned.** Exam items pin each question's live version on every save/publish; an attempt copies
+  everything it needs (sections, marks, negative %, option order) at start. Editing or unpublishing an exam never
+  changes a running attempt. Only admins can change a published exam, and it must stay publishable.
+- **One attempt at a time** per candidate per exam (Postgres advisory lock); `maxAttempts` enforced (409 `ATTEMPT_LIMIT_REACHED`).
+- **Timed sections** run in order; time spills into the next section; "Finish section" forfeits the remainder; answers
+  to other sections are rejected per item (`SECTION_LOCKED`) without failing the rest of the save. Only the current
+  section's questions are sent to the client.
+- **Answers are validated** against the pinned version (unknown options, multi-pick on single-answer, language, 64 KB
+  code). Bad answers come back in `rejected[]`; the rest are saved. Candidates never receive `isCorrect`,
+  explanations or hidden tests.
+- **Auto-submit**: the client submits at zero with `auto: true`; the server accepts it only if its clock agrees
+  (within the grace), so a client that counted down while offline doesn't lose server-side time. The server also
+  closes attempts itself: on the next contact, and via `ExamSessionSweeper` (every `EXAM_SWEEP_INTERVAL_SECONDS`)
+  for strict-clock attempts that ran out and pause-on-disconnect attempts idle for `EXAM_ABANDON_AFTER_HOURS` (`abandoned`).
+- Output comparison for test cases (`outputsMatch`): CRLF→LF, trailing whitespace per line and trailing blank lines
+  ignored. Step 8's grader should reuse it.
+- `exam_reminder` email stays unwired: Step 7 exams are on-demand (no scheduled start time). Wire it when scheduled
+  exams/enrolment exist.
+
+**API** (`/api/v1`)
+- Admin [editor, admin; publish/unpublish/archive/restore = admin]: `GET/POST admin/exams`, `GET/PUT/DELETE admin/exams/:id`,
+  `POST admin/exams/:id/publish|unpublish|archive|restore`. `GET admin/questions?live=true` added for the picker.
+- Candidate [any signed-in user]: `GET exams?kind`, `GET exams/:id`, `POST exams/:id/sessions {consent:true}` (201 new /
+  200 existing), `GET exam-sessions`, `GET exam-sessions/:id` (read-only), `POST exam-sessions/:id/resume`,
+  `PATCH exam-sessions/:id {answers[]}` (autosave), `POST exam-sessions/:id/next-section`, `POST exam-sessions/:id/submit
+  {answers[], auto?}`, `POST exam-sessions/:id/run {itemId, language, code}` (sample tests, cooldown `CODE_RUN_COOLDOWN_SECONDS`).
+- Error codes: `EXAM_NOT_FOUND`, `INVALID_EXAM` (+`errors[]`), `INVALID_TRANSITION`, `EXAM_ARCHIVED`, `EXAM_HAS_ATTEMPTS`,
+  `PUBLISHED_EXAM_ADMIN_ONLY`, `SESSION_NOT_FOUND`, `SESSION_CLOSED` (+`submitReason`), `ATTEMPT_LIMIT_REACHED`,
+  `NOT_SECTION_TIMED`, `ITEM_NOT_FOUND`, `NOT_CODING_QUESTION`, `SECTION_LOCKED`, `RUN_COOLDOWN`.
+- New env vars: `EXAM_AUTOSAVE_INTERVAL_SECONDS` (15), `EXAM_OFFLINE_GRACE_SECONDS` (45, ≥ 2× autosave),
+  `EXAM_ABANDON_AFTER_HOURS` (24), `EXAM_SWEEPER_ENABLED` (true), `EXAM_SWEEP_INTERVAL_SECONDS` (60), `CODE_RUNNER`
+  (`disabled`), `CODE_RUN_COOLDOWN_SECONDS` (3).
+- Dev seed now also creates 2 published exams: "Software Engineering Fundamentals — Mock Test" (45 min, 8 MCQ with 25%
+  negative marking + 2 coding) and "Backend Engineer — Virtual Interview" (timed sections 5 + 30 min, strict clock, 3 attempts).
+- Frontend deps added: `@monaco-editor/react`, `monaco-editor` (bundled, lazy chunk), `react-markdown` (safe Markdown
+  for question bodies/instructions). `Dialog` gained `size="wide"`.
+
+**Verified**
+- Backend: typecheck 0 errors, lint, prettier. **81 unit tests** (new: clock charging/pause/strict/spill-over/forfeit,
+  answer validation, no answer-key leakage, output comparison, builder rules, real-process runner: verdicts, time
+  limit, no env leakage). **47 e2e tests** against real Postgres (new exam suite, 9): builder RBAC + publish rules,
+  catalog/consent/one-attempt/no answer keys, autosave + resume, pause-on-disconnect charges only the grace + `resumed`
+  event, strict clock auto-submits, sweep (expired / abandoned / untouched), timed sections lock + forfeit, submit +
+  attempt limit + live-exam edits don't touch running attempts + early `auto` submit refused, run endpoint.
+- Frontend: lint, prettier, `tsc -b`, production build.
+- Browser (1280px + 375px) with the local stack: built and published an exam (validation errors placed on the section),
+  took the mock test (answer, mark for review, autosave), reloaded → answers/flags/position/timer restored; **stopped the
+  API mid-test** → offline banner, answered offline (kept in localStorage), reloaded, restarted the API → the offline
+  answer synced and the server charged 45 s for a 98 s outage; Monaco + Run (2/2 samples passed via the local runner);
+  submit dialog + summary; timer run-out → auto-submitted as `time_expired`; timed-section interview on a phone:
+  palette drawer, finish section → next round with its own clock. No horizontal overflow.
+- **Found and fixed while testing:** (1) a single failed request on load stranded the runtime on an error page →
+  load now retries with backoff + "Try again"; (2) **`CODE_RUNNER=local` on Windows** called `python3` (the Python
+  install-manager shim), which with the stripped run environment began downloading Python into the temp run dir (killed
+  by the time limit; nothing installed; leftover dir removed) → the runner now resolves the real interpreter path once
+  and runs it with `-I`; (3) phone layout tweaks (compact top bar, palette above the two-row bottom bar).
+- **Not verified:** real Redis/BullMQ and Docker (still none on this machine); Java/C++ execution (Step 8).
+
+**Notes for next steps**
+- Step 8: bind the judge to `CODE_RUNNER`; grade `exam_session_items` (use `marks`, `negative_mark_percent`,
+  `partial_scoring` on the item, `outputsMatch`); subscribe to `submitted`. Add grading columns/status then.
+- Step 9: scorecards read `exam_sessions.snapshot` + items; `/history` placeholder and the dashboard "Recent activity"
+  widget can list `GET /exam-sessions`.
+- Step 14: subscribe to `ExamSessionLifecycle`; `exam_session_events` is the place for tab-switch/fullscreen events.
+- Known local-dev caveat: if the page is **reloaded while the API is down**, session restore fails and the user lands on
+  `/login` (they return to the exam after signing in, answers intact). Treating "server unreachable" as "still signed in"
+  in `AuthProvider` would remove that step. It's a Step 2 change, left for review.
+- Local dev: the Prisma dev Postgres degraded after heavy concurrent use in the browser session ("Server has closed the
+  connection" in e2e); `npx prisma dev stop interview-prep` + `start` fixed it. Browser tests used separate
+  `@example.test` accounts (credentials in the gitignored `tools/local-dev/.env.test-accounts`) on
+  `http://exam.localhost:5173` so the owner's signed-in session on `localhost` wasn't touched.

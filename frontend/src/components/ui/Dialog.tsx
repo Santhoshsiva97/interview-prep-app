@@ -8,6 +8,8 @@ interface DialogProps {
   children: ReactNode;
   /** Buttons row; rendered right-aligned under the content. */
   actions: ReactNode;
+  /** `wide` for pickers and other content-heavy dialogs. */
+  size?: 'default' | 'wide';
 }
 
 /**
@@ -20,6 +22,7 @@ export function Dialog({
   onClose,
   children,
   actions,
+  size = 'default',
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -35,6 +38,7 @@ export function Dialog({
     <dialog
       ref={ref}
       className={styles.dialog}
+      data-size={size}
       aria-labelledby={titleId}
       onClose={onClose}
       onCancel={onClose}

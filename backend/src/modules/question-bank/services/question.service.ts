@@ -76,6 +76,7 @@ export class QuestionService {
       ...(q.difficulty && { difficulty: q.difficulty }),
       ...(q.topicId && { topicId: q.topicId }),
       ...(q.tagId && { tags: { some: { tagId: q.tagId } } }),
+      ...(q.live === 'true' && { publishedVersionId: { not: null } }),
       ...(q.search && {
         OR: [
           { title: { contains: q.search, mode: 'insensitive' } },

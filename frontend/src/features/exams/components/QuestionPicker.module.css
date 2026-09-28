@@ -1,0 +1,78 @@
+.filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  max-height: min(46dvh, 420px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  list-style: none;
+}
+
+.list li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--color-bg);
+}
+
+.row[data-disabled='true'] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.row input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rowText strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowText small {
+  color: var(--color-text-muted);
+}
+
+.empty {
+  padding: 20px;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filters > :first-child {
+    grid-column: 1 / -1;
+  }
+}

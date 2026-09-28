@@ -30,3 +30,13 @@ Caveats:
 - File uploads need an S3 endpoint. Either run an S3 emulator (e.g. `npx s3rver --directory ./s3data --port 9000 --configure-bucket interview-prep`, creds `S3RVER`/`S3RVER`) and add `S3_ENDPOINT=http://localhost:9000 S3_ACCESS_KEY_ID=S3RVER S3_SECRET_ACCESS_KEY=S3RVER`, or skip avatar/resume testing.
 - The Prisma local Postgres can't run concurrent queries, so an occasional 500 (`bind message supplies…`) is the database, not the app.
 - Seed data: `npm --prefix backend run seed:dev`. First super admin: `npm --prefix backend run admin:promote -- <email>`.
+
+## Exams (Step 7)
+
+- Add `CODE_RUNNER=local` to the backend launch command to make **Run sample tests** execute JavaScript/Python
+  locally (unsandboxed child processes, dev only). Without it, Run reports that code execution is unavailable.
+- To test as another user without signing out of your own session, open the app on a different loopback host,
+  e.g. `http://exam.localhost:5173` (separate cookies). Local test-account credentials, if created, live in the
+  gitignored `tools/local-dev/.env.test-accounts`.
+- If e2e tests start failing with `Server has closed the connection`, restart the dev database:
+  `npx --prefix db prisma dev stop interview-prep`, then start it again.

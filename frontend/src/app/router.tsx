@@ -7,6 +7,8 @@ import { AdminEmailPage } from '../pages/admin/AdminEmailPage';
 import { AdminStaffPage } from '../pages/admin/AdminStaffPage';
 import { AdminUserDetailPage } from '../pages/admin/AdminUserDetailPage';
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
+import { ExamBuilderPage } from '../pages/admin/exams/ExamBuilderPage';
+import { ExamsListPage } from '../pages/admin/exams/ExamsListPage';
 import { QuestionEditorPage } from '../pages/admin/questions/QuestionEditorPage';
 import { QuestionImportPage } from '../pages/admin/questions/QuestionImportPage';
 import { QuestionsListPage } from '../pages/admin/questions/QuestionsListPage';
@@ -18,10 +20,13 @@ import { SignupPage } from '../pages/auth/SignupPage';
 import { VerifyEmailPage } from '../pages/auth/VerifyEmailPage';
 import { ComingSoonPage } from '../pages/ComingSoonPage';
 import { ErrorPage } from '../pages/ErrorPage';
+import { ExamRuntimePage } from '../pages/exam/ExamRuntimePage';
 import { HomePage } from '../pages/HomePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { DashboardPage } from '../pages/portal/DashboardPage';
 import { ProfilePage } from '../pages/portal/ProfilePage';
+import { TestInstructionsPage } from '../pages/portal/tests/TestInstructionsPage';
+import { TestsPage } from '../pages/portal/tests/TestsPage';
 
 // Placeholder routes are replaced as each module is built (see PROGRESS_LOG.md).
 export const router = createBrowserRouter([
@@ -32,10 +37,14 @@ export const router = createBrowserRouter([
     errorElement: <ErrorPage />,
     children: [
       { index: true, element: <HomePage /> },
-      { path: 'exams', element: <ComingSoonPage title="Mock Exams" /> },
+      // Step 7: the catalog lives in the portal (sign-in required).
+      {
+        path: 'exams',
+        element: <Navigate to="/tests?kind=mock_exam" replace />,
+      },
       {
         path: 'interviews',
-        element: <ComingSoonPage title="Virtual Interviews" />,
+        element: <Navigate to="/tests?kind=virtual_interview" replace />,
       },
       { path: 'pricing', element: <ComingSoonPage title="Pricing" /> },
 
@@ -129,14 +138,29 @@ export const router = createBrowserRouter([
           </RequireAuth>
         ),
       },
+      // Exam & interview builder (Step 7)
       {
-        // Step 7 (exam engine)
         path: 'exams',
         element: (
-          <ComingSoonPage
-            title="Exam & Template Builder"
-            description="Build mock exams and interview templates: sections, question selection, time limits and marking schemes."
-          />
+          <RequireAuth roles={['editor', 'admin']}>
+            <ExamsListPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'exams/new',
+        element: (
+          <RequireAuth roles={['editor', 'admin']}>
+            <ExamBuilderPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'exams/:id',
+        element: (
+          <RequireAuth roles={['editor', 'admin']}>
+            <ExamBuilderPage />
+          </RequireAuth>
         ),
       },
       {
@@ -183,6 +207,17 @@ export const router = createBrowserRouter([
     ],
   },
 
+  // Exam runtime (Step 7): full screen, no site chrome
+  {
+    path: 'exam/:sessionId',
+    element: (
+      <RequireAuth>
+        <ExamRuntimePage />
+      </RequireAuth>
+    ),
+    errorElement: <ErrorPage />,
+  },
+
   // Client portal (Step 3) — signed-in users only
   {
     element: <PortalLayout />,
@@ -191,6 +226,9 @@ export const router = createBrowserRouter([
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'profile', element: <ProfilePage /> },
       { path: 'account', element: <Navigate to="/profile" replace /> },
+      // Mock tests & interviews (Step 7)
+      { path: 'tests', element: <TestsPage /> },
+      { path: 'tests/:id', element: <TestInstructionsPage /> },
       {
         // Step 6 (question bank) + Step 19 (search & filter)
         path: 'practice',

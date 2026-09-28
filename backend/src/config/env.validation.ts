@@ -54,6 +54,23 @@ export interface EnvVars {
   MAIL_RETRY_BASE_DELAY_MS: number;
   /** Run the mail worker in this process (disable to run workers separately). */
   MAIL_WORKER_ENABLED: boolean;
+
+  // ── Exams (FRD §4.6) ──
+  /** How often the exam runtime autosaves answers + remaining time. */
+  EXAM_AUTOSAVE_INTERVAL_SECONDS: number;
+  /**
+   * A gap between saves longer than this counts as a disconnection. For
+   * pause-on-disconnect exams only this much of the gap is charged.
+   */
+  EXAM_OFFLINE_GRACE_SECONDS: number;
+  /** Pause-on-disconnect attempts not resumed within this are auto-submitted. */
+  EXAM_ABANDON_AFTER_HOURS: number;
+  /** Run the expiry sweep in this process. */
+  EXAM_SWEEPER_ENABLED: boolean;
+  EXAM_SWEEP_INTERVAL_SECONDS: number;
+  /** `disabled` until the judge exists (Step 8); `local` = unsandboxed child processes, dev only. */
+  CODE_RUNNER: 'disabled' | 'local';
+  CODE_RUN_COOLDOWN_SECONDS: number;
 }
 
 // Validated once at boot; the app refuses to start on a bad/missing value.
@@ -129,4 +146,31 @@ export const envValidationSchema = Joi.object<EnvVars, true>({
   MAIL_MAX_ATTEMPTS: Joi.number().integer().min(1).max(10).default(3),
   MAIL_RETRY_BASE_DELAY_MS: Joi.number().integer().min(100).default(10_000),
   MAIL_WORKER_ENABLED: Joi.boolean().default(true),
+
+  EXAM_AUTOSAVE_INTERVAL_SECONDS: Joi.number()
+    .integer()
+    .min(5)
+    .max(120)
+    .default(15),
+  // Must comfortably exceed the autosave interval, or connected candidates look offline.
+  EXAM_OFFLINE_GRACE_SECONDS: Joi.number()
+    .integer()
+    .min(
+      Joi.ref('EXAM_AUTOSAVE_INTERVAL_SECONDS', {
+        adjust: (v: number) => v * 2,
+      }),
+    )
+    .default(45),
+  EXAM_ABANDON_AFTER_HOURS: Joi.number().integer().min(1).default(24),
+  EXAM_SWEEPER_ENABLED: Joi.boolean().default(true),
+  EXAM_SWEEP_INTERVAL_SECONDS: Joi.number().integer().min(5).default(60),
+  // `local` runs candidate code unsandboxed: never allowed in production.
+  CODE_RUNNER: Joi.string()
+    .valid('disabled', 'local')
+    .when('NODE_ENV', {
+      is: 'production',
+      then: Joi.valid('disabled').default('disabled'),
+      otherwise: Joi.string().default('disabled'),
+    }),
+  CODE_RUN_COOLDOWN_SECONDS: Joi.number().integer().min(0).default(3),
 });

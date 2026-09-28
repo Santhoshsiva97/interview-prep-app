@@ -79,6 +79,10 @@ model User {
   questionImports    QuestionImport[]
   suspendedBy        User?             @relation("UserSuspensions", fields: [suspendedById], references: [id], onDelete: SetNull)
   suspendedUsers     User[]            @relation("UserSuspensions")
+  examsCreated       Exam[]            @relation("ExamCreator")
+  examsUpdated       Exam[]            @relation("ExamUpdater")
+  examsPublished     Exam[]            @relation("ExamPublisher")
+  examSessions       ExamSession[]
 
   @@index([role])
   @@index([status])
@@ -283,6 +287,8 @@ model Question {
   author           User?             @relation("QuestionAuthor", fields: [authorId], references: [id], onDelete: SetNull)
   submittedBy      User?             @relation("QuestionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
   reviewedBy       User?             @relation("QuestionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  examItems        ExamItem[]
+  sessionItems     ExamSessionItem[]
 
   @@index([status])
   @@index([type])
@@ -313,11 +319,13 @@ model QuestionVersion {
   updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt     DateTime?  @map("deleted_at") @db.Timestamptz(6)
 
-  question    Question  @relation("QuestionVersions", fields: [questionId], references: [id], onDelete: Cascade)
-  topic       Topic     @relation(fields: [topicId], references: [id])
-  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  currentOf   Question? @relation("CurrentVersion")
-  publishedOf Question? @relation("PublishedVersion")
+  question     Question          @relation("QuestionVersions", fields: [questionId], references: [id], onDelete: Cascade)
+  topic        Topic             @relation(fields: [topicId], references: [id])
+  createdBy    User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  currentOf    Question?         @relation("CurrentVersion")
+  publishedOf  Question?         @relation("PublishedVersion")
+  examItems    ExamItem[]        @relation("ExamItemVersion")
+  sessionItems ExamSessionItem[] @relation("SessionItemVersion")
 
   @@unique([questionId, versionNumber])
   @@map("question_versions")
@@ -359,4 +367,221 @@ model QuestionImport {
 
   @@index([createdAt])
   @@map("question_imports")
+}
+
+// ───────────────────────────── Exams & Sessions ──────────────────────────────
+// FRD §4.6 (Virtual Interview & Exam Module). Built ahead of Step 1: reconcile
+// with the Database Module Design Document.
+
+enum ExamKind {
+  mock_exam
+  virtual_interview
+
+  @@map("exam_kind")
+}
+
+enum ExamStatus {
+  draft
+  published
+  archived
+
+  @@map("exam_status")
+}
+
+/// Exam / interview template built by staff. Structure: exam → sections → items.
+model Exam {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title             String     @db.VarChar(200)
+  kind              ExamKind   @default(mock_exam)
+  status            ExamStatus @default(draft)
+  /// Short summary shown in the catalog.
+  description       String?    @db.VarChar(1000)
+  /// Markdown shown on the pre-test instructions/consent screen.
+  instructions      String     @db.Text
+  /// Total time. When `sectionTimed`, always the sum of the section limits.
+  durationMinutes   Int        @map("duration_minutes")
+  /// Sections run in order, each on its own clock; finished sections lock.
+  sectionTimed      Boolean    @default(false) @map("section_timed")
+  /// true: time offline (beyond a short grace) isn't charged, so a dropped
+  /// connection resumes with the saved remaining time. false: the clock keeps running.
+  pauseOnDisconnect Boolean    @default(true) @map("pause_on_disconnect")
+  shuffleQuestions  Boolean    @default(false) @map("shuffle_questions")
+  shuffleOptions    Boolean    @default(false) @map("shuffle_options")
+  /// Null = unlimited attempts.
+  maxAttempts       Int?       @map("max_attempts")
+  /// Pass mark as a percentage of total marks (used by scorecards, Step 9).
+  passPercent       Int?       @map("pass_percent") @db.SmallInt
+  createdById       String?    @map("created_by_id") @db.Uuid
+  updatedById       String?    @map("updated_by_id") @db.Uuid
+  publishedAt       DateTime?  @map("published_at") @db.Timestamptz(6)
+  publishedById     String?    @map("published_by_id") @db.Uuid
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt         DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  sections    ExamSection[]
+  sessions    ExamSession[]
+  createdBy   User?         @relation("ExamCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   User?         @relation("ExamUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  publishedBy User?         @relation("ExamPublisher", fields: [publishedById], references: [id], onDelete: SetNull)
+
+  @@index([status, kind])
+  @@index([createdAt])
+  @@map("exams")
+}
+
+/// A section and its marking scheme.
+model ExamSection {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  examId              String    @map("exam_id") @db.Uuid
+  position            Int
+  title               String    @db.VarChar(120)
+  description         String?   @db.VarChar(1000)
+  /// Required when the exam is section-timed; ignored otherwise.
+  durationMinutes     Int?      @map("duration_minutes")
+  /// Overrides each question's own marks. Null = use the question's marks.
+  marksPerQuestion    Int?      @map("marks_per_question")
+  /// A wrong MCQ answer deducts this % of the question's marks (0 = no negative marking).
+  negativeMarkPercent Int       @default(0) @map("negative_mark_percent") @db.SmallInt
+  /// Allow partial credit (coding: by passed test-case weight; multi-answer MCQ:
+  /// by options). Off = all-or-nothing. Applied by the grader (Step 8).
+  partialScoring      Boolean   @default(true) @map("partial_scoring")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt           DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  exam  Exam       @relation(fields: [examId], references: [id], onDelete: Cascade)
+  items ExamItem[]
+
+  @@unique([examId, position])
+  @@map("exam_sections")
+}
+
+/// A question placed in a section. `questionVersionId` pins the version candidates
+/// get: the question's live version when the exam was last saved.
+model ExamItem {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sectionId         String    @map("section_id") @db.Uuid
+  position          Int
+  questionId        String    @map("question_id") @db.Uuid
+  /// Null while the question has no live version (the exam can't be published then).
+  questionVersionId String?   @map("question_version_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  section         ExamSection      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  question        Question         @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  questionVersion QuestionVersion? @relation("ExamItemVersion", fields: [questionVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([sectionId, position])
+  @@index([questionId])
+  @@map("exam_items")
+}
+
+enum ExamSessionStatus {
+  in_progress
+  submitted
+
+  @@map("exam_session_status")
+}
+
+enum ExamSubmitReason {
+  /// The candidate clicked Submit.
+  manual
+  /// The clock ran out (client auto-submit, or detected by the server).
+  time_expired
+  /// Pause-on-disconnect session not resumed within EXAM_ABANDON_AFTER_HOURS.
+  abandoned
+
+  @@map("exam_submit_reason")
+}
+
+/// One attempt at an exam. Self-contained: sections and items are copied from
+/// the exam at start, so editing the exam never changes a running attempt.
+/// Timing is server-authoritative (see exam-clock.ts in the exams module).
+model ExamSession {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  examId              String            @map("exam_id") @db.Uuid
+  userId              String            @map("user_id") @db.Uuid
+  attemptNumber       Int               @map("attempt_number")
+  status              ExamSessionStatus @default(in_progress)
+  consentedAt         DateTime          @map("consented_at") @db.Timestamptz(6)
+  startedAt           DateTime          @default(now()) @map("started_at") @db.Timestamptz(6)
+  /// Total time left, as of `lastSyncedAt`.
+  timeRemainingMs     Int               @map("time_remaining_ms")
+  /// Section-timed exams only: time left in the current section, as of `lastSyncedAt`.
+  sectionRemainingMs  Int?              @map("section_remaining_ms")
+  currentSectionIndex Int               @default(0) @map("current_section_index")
+  /// Last server contact (start, resume or autosave); the clock is charged from here.
+  lastSyncedAt        DateTime          @map("last_synced_at") @db.Timestamptz(6)
+  submittedAt         DateTime?         @map("submitted_at") @db.Timestamptz(6)
+  submitReason        ExamSubmitReason? @map("submit_reason")
+  /// Exam settings and sections as they were at start: { settings, sections[] }.
+  snapshot            Json
+  totalMarks          Int               @map("total_marks")
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt           DateTime?         @map("deleted_at") @db.Timestamptz(6)
+
+  exam   Exam               @relation(fields: [examId], references: [id], onDelete: Restrict)
+  user   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  ExamSessionItem[]
+  events ExamSessionEvent[]
+
+  @@unique([userId, examId, attemptNumber])
+  @@index([userId, status])
+  @@index([examId])
+  @@index([status, lastSyncedAt])
+  @@map("exam_sessions")
+}
+
+/// A question in a session, in the order the candidate sees it, plus their answer.
+model ExamSessionItem {
+  id                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId           String       @map("session_id") @db.Uuid
+  sectionIndex        Int          @map("section_index")
+  position            Int
+  questionId          String       @map("question_id") @db.Uuid
+  questionVersionId   String       @map("question_version_id") @db.Uuid
+  type                QuestionType
+  /// Marks for a fully correct answer (section override or the question's own).
+  marks               Int
+  negativeMarkPercent Int          @map("negative_mark_percent") @db.SmallInt
+  partialScoring      Boolean      @map("partial_scoring")
+  /// MCQ: option ids in display order (shuffled when the exam says so).
+  optionOrder         Json?        @map("option_order")
+  /// MCQ `{ optionIds }` or coding `{ language, sources: { [language]: code } }`. Null = unanswered.
+  response            Json?
+  markedForReview     Boolean      @default(false) @map("marked_for_review")
+  visitedAt           DateTime?    @map("visited_at") @db.Timestamptz(6)
+  answeredAt          DateTime?    @map("answered_at") @db.Timestamptz(6)
+  timeSpentMs         Int          @default(0) @map("time_spent_ms")
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt           DateTime?    @map("deleted_at") @db.Timestamptz(6)
+
+  session         ExamSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question        Question        @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  questionVersion QuestionVersion @relation("SessionItemVersion", fields: [questionVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, sectionIndex, position])
+  @@map("exam_session_items")
+}
+
+/// Session lifecycle log (started, resumed, section_advanced, submitted, …).
+/// Proctoring (Step 14) appends its own event types here.
+model ExamSessionEvent {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId String    @map("session_id") @db.Uuid
+  type      String    @db.VarChar(40)
+  data      Json?
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  session ExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("exam_session_events")
 }

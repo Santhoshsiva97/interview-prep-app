@@ -17,6 +17,7 @@ export default defineConfig({
       S3_AUTO_CREATE_BUCKET: 'false',
       MAIL_TRANSPORT: 'log',
       MAIL_WORKER_ENABLED: 'false',
+      EXAM_SWEEPER_ENABLED: 'false',
     },
   },
 });

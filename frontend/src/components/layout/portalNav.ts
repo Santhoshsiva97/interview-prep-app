@@ -26,6 +26,7 @@ export const homePathFor = (role: UserRole) =>
 // Client portal navigation (FRD §4.2).
 export const PORTAL_NAV: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { to: '/tests', label: 'Mock Tests', icon: 'target' },
   { to: '/practice', label: 'Practice Library', icon: 'practice', soon: true },
   {
     to: '/history',
@@ -78,9 +79,8 @@ export const ADMIN_NAV: NavItem[] = [
   },
   {
     to: '/admin/exams',
-    label: 'Exam Builder',
-    icon: 'history',
-    soon: true,
+    label: 'Exams',
+    icon: 'target',
     roles: ['admin', 'editor'],
   },
   {

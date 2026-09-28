@@ -24,6 +24,8 @@ import { ExamRuntimePage } from '../pages/exam/ExamRuntimePage';
 import { HomePage } from '../pages/HomePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { DashboardPage } from '../pages/portal/DashboardPage';
+import { HistoryPage } from '../pages/portal/history/HistoryPage';
+import { ScorecardPage } from '../pages/portal/history/ScorecardPage';
 import { ProfilePage } from '../pages/portal/ProfilePage';
 import { TestInstructionsPage } from '../pages/portal/tests/TestInstructionsPage';
 import { TestsPage } from '../pages/portal/tests/TestsPage';
@@ -239,16 +241,9 @@ export const router = createBrowserRouter([
           />
         ),
       },
-      {
-        // Step 9 (scorecards)
-        path: 'history',
-        element: (
-          <ComingSoonPage
-            title="History & Scorecards"
-            description="Review past mock exams and interviews, with section-wise scores, time spent and answer review."
-          />
-        ),
-      },
+      // History & Scorecards (Step 9)
+      { path: 'history', element: <HistoryPage /> },
+      { path: 'history/:sessionId', element: <ScorecardPage /> },
       {
         // Step 6 (question bank) — bookmarking questions
         path: 'bookmarks',

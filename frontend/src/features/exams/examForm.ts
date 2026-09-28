@@ -38,6 +38,7 @@ export interface ExamForm {
   shuffleOptions: boolean;
   maxAttempts: string;
   passPercent: string;
+  answerReview: ExamInput['answerReview'];
   sections: SectionForm[];
 }
 
@@ -74,6 +75,7 @@ export const blankExam = (): ExamForm => ({
   shuffleOptions: false,
   maxAttempts: '',
   passPercent: '',
+  answerReview: 'full',
   sections: [blankSection(1)],
 });
 
@@ -92,6 +94,7 @@ export function formFromExam(e: ExamDetail): ExamForm {
     shuffleOptions: e.shuffleOptions,
     maxAttempts: str(e.maxAttempts),
     passPercent: str(e.passPercent),
+    answerReview: e.answerReview,
     sections: e.sections.map((s) => ({
       key: key(),
       title: s.title,
@@ -132,6 +135,7 @@ export function formToInput(f: ExamForm): ExamInput {
     shuffleOptions: f.shuffleOptions,
     maxAttempts: num(f.maxAttempts),
     passPercent: num(f.passPercent),
+    answerReview: f.answerReview,
     sections: f.sections.map((s) => ({
       title: s.title,
       description: s.description.trim() || null,

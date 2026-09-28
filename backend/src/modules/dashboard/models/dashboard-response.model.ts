@@ -15,6 +15,7 @@ export interface StreakData {
 }
 
 export interface ActivityItem {
+  /** For exams/interviews: the attempt id (links to /history/:id). */
   id: string;
   type: 'practice' | 'exam' | 'interview';
   title: string;
@@ -37,7 +38,7 @@ export interface DashboardResponse {
   profileCompleteness: DashboardWidget<ProfileCompleteness>;
   /** Wired in Step 17 (Gamification). */
   streak: DashboardWidget<StreakData | null>;
-  /** Wired in Steps 7–9 (exam engine, evaluation, scorecards). */
+  /** Live since Step 9: submitted attempts with their score. Practice joins later. */
   recentActivity: DashboardWidget<ActivityItem[]>;
   /** Wired in Steps 6 + 10 (question bank, analytics-driven recommendations). */
   recommendedTests: DashboardWidget<RecommendedTest[]>;

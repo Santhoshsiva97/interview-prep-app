@@ -84,6 +84,7 @@ model User {
   examsPublished     Exam[]            @relation("ExamPublisher")
   examSessions       ExamSession[]
   codeSubmissions    CodeSubmission[]
+  scorecards         Scorecard[]
 
   @@index([role])
   @@index([status])
@@ -391,37 +392,40 @@ enum ExamStatus {
 
 /// Exam / interview template built by staff. Structure: exam → sections → items.
 model Exam {
-  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  title             String     @db.VarChar(200)
-  kind              ExamKind   @default(mock_exam)
-  status            ExamStatus @default(draft)
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title             String             @db.VarChar(200)
+  kind              ExamKind           @default(mock_exam)
+  status            ExamStatus         @default(draft)
   /// Short summary shown in the catalog.
-  description       String?    @db.VarChar(1000)
+  description       String?            @db.VarChar(1000)
   /// Markdown shown on the pre-test instructions/consent screen.
-  instructions      String     @db.Text
+  instructions      String             @db.Text
   /// Total time. When `sectionTimed`, always the sum of the section limits.
-  durationMinutes   Int        @map("duration_minutes")
+  durationMinutes   Int                @map("duration_minutes")
   /// Sections run in order, each on its own clock; finished sections lock.
-  sectionTimed      Boolean    @default(false) @map("section_timed")
+  sectionTimed      Boolean            @default(false) @map("section_timed")
   /// true: time offline (beyond a short grace) isn't charged, so a dropped
   /// connection resumes with the saved remaining time. false: the clock keeps running.
-  pauseOnDisconnect Boolean    @default(true) @map("pause_on_disconnect")
-  shuffleQuestions  Boolean    @default(false) @map("shuffle_questions")
-  shuffleOptions    Boolean    @default(false) @map("shuffle_options")
+  pauseOnDisconnect Boolean            @default(true) @map("pause_on_disconnect")
+  shuffleQuestions  Boolean            @default(false) @map("shuffle_questions")
+  shuffleOptions    Boolean            @default(false) @map("shuffle_options")
   /// Null = unlimited attempts.
-  maxAttempts       Int?       @map("max_attempts")
+  maxAttempts       Int?               @map("max_attempts")
   /// Pass mark as a percentage of total marks (used by scorecards, Step 9).
-  passPercent       Int?       @map("pass_percent") @db.SmallInt
-  createdById       String?    @map("created_by_id") @db.Uuid
-  updatedById       String?    @map("updated_by_id") @db.Uuid
-  publishedAt       DateTime?  @map("published_at") @db.Timestamptz(6)
-  publishedById     String?    @map("published_by_id") @db.Uuid
-  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt         DateTime?  @map("deleted_at") @db.Timestamptz(6)
+  passPercent       Int?               @map("pass_percent") @db.SmallInt
+  /// What candidates may see after grading (FRD §4.8 answer review).
+  answerReview      AnswerReviewPolicy @default(full) @map("answer_review")
+  createdById       String?            @map("created_by_id") @db.Uuid
+  updatedById       String?            @map("updated_by_id") @db.Uuid
+  publishedAt       DateTime?          @map("published_at") @db.Timestamptz(6)
+  publishedById     String?            @map("published_by_id") @db.Uuid
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz(6)
 
   sections    ExamSection[]
   sessions    ExamSession[]
+  scorecards  Scorecard[]
   createdBy   User?         @relation("ExamCreator", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy   User?         @relation("ExamUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
   publishedBy User?         @relation("ExamPublisher", fields: [publishedById], references: [id], onDelete: SetNull)
@@ -536,6 +540,7 @@ model ExamSession {
   items           ExamSessionItem[]
   codeSubmissions CodeSubmission[]
   events          ExamSessionEvent[]
+  scorecard       Scorecard?
 
   @@unique([userId, examId, attemptNumber])
   @@index([userId, status])
@@ -689,4 +694,59 @@ model CodeSubmission {
   @@index([sessionItemId, createdAt])
   @@index([status])
   @@map("code_submissions")
+}
+
+// ─────────────────────────────── Scorecards ───────────────────────────────────
+// FRD §4.8. Built ahead of Step 1: reconcile with the Database Module Design Document.
+
+enum AnswerReviewPolicy {
+  /// Own answers, correct answers, explanations and sample-test results.
+  full
+  /// Own answers and whether each was right; no answer key or explanations.
+  own_answers
+  /// Scores and breakdowns only.
+  none
+
+  @@map("answer_review_policy")
+}
+
+/// Result of a fully graded attempt (1:1 with exam_sessions), built when grading
+/// finishes. Scores in hundredths of a mark; percentages in basis points (1% = 100).
+model Scorecard {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId           String    @unique @map("session_id") @db.Uuid
+  examId              String    @map("exam_id") @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  attemptNumber       Int       @map("attempt_number")
+  /// Raw total; can be negative with negative marking.
+  scoreCenti          Int       @map("score_centi")
+  maxScoreCenti       Int       @map("max_score_centi")
+  /// score / max, floored at 0% (a negative total shows as 0%).
+  percentBp           Int       @map("percent_bp")
+  /// Null when the exam has no pass mark.
+  passed              Boolean?
+  /// Share of the cohort (candidates' first graded attempts at this exam) scoring
+  /// below this attempt, ties counted half. Refreshed when the cohort grows.
+  percentileBp        Int       @map("percentile_bp")
+  cohortSize          Int       @map("cohort_size")
+  percentileUpdatedAt DateTime  @map("percentile_updated_at") @db.Timestamptz(6)
+  /// [{ index, title, scoreCenti, maxScoreCenti, questionCount, correct, partial, incorrect, unanswered, timeSpentMs }]
+  sections            Json
+  /// [{ topicId, name, scoreCenti, maxScoreCenti, questionCount, correct }]
+  topics              Json
+  /// Time on questions (client-measured, summed) and wall time from start to submit.
+  timeSpentMs         Int       @map("time_spent_ms")
+  durationMs          Int       @map("duration_ms")
+  submittedAt         DateTime  @map("submitted_at") @db.Timestamptz(6)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt           DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  session ExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exam    Exam        @relation(fields: [examId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, submittedAt])
+  @@index([examId, attemptNumber, scoreCenti])
+  @@map("scorecards")
 }

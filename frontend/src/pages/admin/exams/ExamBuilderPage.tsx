@@ -29,6 +29,7 @@ import {
   type SectionForm,
 } from '../../../features/exams/examForm';
 import { DifficultyBadge } from '../../../features/questions/components/QuestionBadges';
+import { REVIEW_POLICY_LABELS } from '../../../features/scorecards/api';
 import { ApiError, errorMessage } from '../../../lib/api';
 import styles from '../Admin.module.css';
 import q from '../questions/Questions.module.css';
@@ -306,6 +307,34 @@ function Builder({
                 />
               </Field>
             </div>
+            <Field
+              label="After grading, candidates see"
+              htmlFor="e-review"
+              hint="Applies to attempts started after you save."
+            >
+              <select
+                id="e-review"
+                className={styles.select}
+                value={form.answerReview}
+                onChange={(e) =>
+                  set(
+                    'answerReview',
+                    e.target.value as ExamForm['answerReview'],
+                  )
+                }
+              >
+                {(
+                  Object.entries(REVIEW_POLICY_LABELS) as [
+                    ExamForm['answerReview'],
+                    string,
+                  ][]
+                ).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <div className={x.toggles}>
               <Toggle
                 checked={form.sectionTimed}

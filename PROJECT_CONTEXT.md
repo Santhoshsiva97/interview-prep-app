@@ -166,6 +166,17 @@ users, the question bank, exams, payments, and ads.
   staff (`GET /admin/exam-sessions/:id/grading`). Admins can `POST /admin/exam-sessions/:id/regrade`
 - Grading lost to an outage is re-queued by `JudgeService.recover()` (runs with the exam sweeper interval)
 
+### Scorecards (Step 9)
+- `modules/scorecards/`: a `scorecards` row (1:1 with an attempt) is built when the judge emits **`graded`** on
+  `ExamSessionLifecycle` (built lazily on read if that was missed). Scores in hundredths of a mark, percentages in
+  **basis points** (`percent_bp`, `percentile_bp`); the API returns marks and 0–100 percentages
+- Percentage is floored at 0% (raw scores can be negative). **Percentile cohort = every candidate's first graded attempt
+  at the exam** (retakes don't skew it), ties counted half; refreshed on read when the cohort has grown
+- Answer review obeys the exam's `answer_review` policy, snapshotted per attempt (`full` | `own_answers` | `none`).
+  Hidden test cases are only ever counted, never shown. New lifecycle consumers: listen for `graded`, not `submitted`
+- Charts (`pages/portal/history/ScorecardCharts.tsx`) are dependency-free SVG, single hue (`--color-primary`),
+  per-mark hover/focus tooltips, and a table for every chart
+
 ### Frontend (React)
 - Routes are declared in `src/app/router.tsx`; unbuilt routes use `<ComingSoonPage title description>`
 - Three layouts: `AppLayout` (public site + auth screens), `PortalLayout` (candidate portal) and
@@ -204,6 +215,8 @@ users, the question bank, exams, payments, and ads.
   src/pages/admin/questions/   QuestionsList, QuestionEditor (MCQ + coding, workflow, history), QuestionImport
   src/pages/admin/exams/       ExamsList, ExamBuilder (sections, marking, question picker, publish)
   src/pages/portal/tests/      Tests catalog, TestInstructions (pre-test consent)
+  src/pages/portal/history/    History (attempts list), Scorecard (breakdowns, charts, answer review)
+  src/features/scorecards/     scorecards API client/types + formatters
   src/pages/exam/              ExamRuntime (MCQ/coding panels, palette, timers, submit), SubmittedSummary
   src/features/exams/          exams API client/types, builder form model, useExamRuntime, CodeEditor (Monaco), QuestionPicker
   src/features/questions/      question-bank API client/types, editor form model, badges
@@ -236,6 +249,7 @@ users, the question bank, exams, payments, and ads.
                                lifecycle hooks, expiry sweeper
   src/modules/judge/           judge queue (runs + grading), scoring, runners (Judge0, local, disabled),
                                /exam-sessions/:id/runs, /admin/exam-sessions/:id/grading|regrade
+  src/modules/scorecards/      scorecards built on `graded`: /scorecards, /scorecards/:sessionId
   src/cli/                     promote-super-admin, seed-dev
   src/generated/prisma/        generated Prisma client (gitignored)
   test/                        e2e tests + test/utils (createTestApp, FakeRedis, FakeStorage, FakeQueue, CapturingTransport, fakeConfig)

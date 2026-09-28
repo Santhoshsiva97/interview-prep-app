@@ -12,7 +12,9 @@ export type ExamSessionEventType =
   /** Section-timed exams: the next section started (`data.reason`: `time` | `candidate`). */
   | 'section_advanced'
   /** Attempt closed (`data.reason`: manual | time_expired | abandoned). */
-  | 'submitted';
+  | 'submitted'
+  /** Fully evaluated by the judge (`data.scoreCenti`); scorecards build on it. Can fire again after a regrade. */
+  | 'graded';
 
 export interface ExamSessionEvent {
   type: ExamSessionEventType;
@@ -27,7 +29,8 @@ export type ExamSessionListener = (event: ExamSessionEvent) => unknown;
 
 /**
  * Hook point for modules that follow an attempt's lifecycle — Proctoring
- * (Step 14) subscribes here, and grading (Step 8) listens for `submitted`.
+ * (Step 14) subscribes here, grading (Step 8) listens for `submitted` and
+ * scorecards (Step 9) for `graded`.
  * Listener errors are logged, never propagated to the candidate's request.
  */
 @Injectable()

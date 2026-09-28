@@ -15,6 +15,8 @@ export interface SessionSnapshot {
     shuffleQuestions: boolean;
     shuffleOptions: boolean;
     passPercent: number | null;
+    /** Missing on attempts started before Step 9 (treated as `full`). */
+    answerReview?: 'full' | 'own_answers' | 'none';
   };
   sections: {
     title: string;

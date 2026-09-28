@@ -138,10 +138,10 @@ The FRD wasn't attached again, so code cites "FRD §4.2" rather than FR-2.x numb
 **Page status — what later steps need to wire up**
 | Route | Status | Wired by |
 |---|---|---|
-| `/dashboard` | **Functional** shell. The *Profile strength* widget is live; *Daily streak*, *Recent activity* and *Recommended tests* are placeholders (`status: 'coming_soon'`) | Streak → Step 17 · Activity → Steps 7–9 · Recommendations → Steps 6 + 10 |
+| `/dashboard` | **Functional** shell. *Profile strength* is live; *Recent activity* is live since Step 9 (graded attempts, linking to scorecards); *Daily streak* and *Recommended tests* are placeholders (`status: 'coming_soon'`) | Streak → Step 17 · Recommendations → Steps 6 + 10 |
 | `/profile` | **Fully functional**: edit details, avatar upload/change/remove, resume upload/replace/remove/download | — |
 | `/practice` | Placeholder (`ComingSoonPage`) | Step 6 (+ Step 19 search/filter) |
-| `/history` | Placeholder | Step 9 (scorecards) |
+| `/history` | ✅ **Functional since Step 9**: attempts list + `/history/:sessionId` scorecards (see the Step 9 entry) | — |
 | `/bookmarks` | Placeholder | Step 6 (bookmarking questions) |
 | `/subscription` | Placeholder | Step 11 (payments) |
 | `/account` | Redirects to `/profile` (Step 2's temporary page was removed) | — |
@@ -658,3 +658,63 @@ CE. The submitted screen shows "Grading your answers…", then **score / max** a
 - Step 13 (audit log): hook `JudgeService.regrade` (the actor is an admin).
 - Production: run Judge0 on dedicated hosts (privileged containers) and set `JUDGE_WORKER_ENABLED=false` on API-only
   instances once separate workers exist. WebSockets could replace polling later without changing the endpoints.
+
+---
+
+## 2026-09-28 — Step 9: Scorecards (FRD §4.8) ✅
+
+Branch `step-9-scorecards` (from `main` @ Step 8). The FRD still wasn't attached, so code cites "FRD §4.8" rather than
+FR-8.1…FR-8.6. Migrations: `20260928180000_scorecards` (table `scorecards`, `exams.answer_review` + enum
+`answer_review_policy`) and `20260928181000_backfill_grading` (data: Step 7 attempts submitted before the judge existed
+are marked `pending`, so the recovery sweep grades them).
+
+**✅ The Step 3 `/history` placeholder is now functional** (`History & Scorecards` in the portal nav, no longer
+"soon"), and the dashboard's **Recent activity** widget is live. Both Step 3 table rows above are updated.
+
+**What's built**
+| FR area | Where |
+|---|---|
+| Total score, percentage and percentile, computed and persisted once fully evaluated | A `scorecards` row built on the judge's new **`graded`** lifecycle event (rebuilt lazily if missed). Score in hundredths of a mark (raw, can be negative); percentage in basis points **floored at 0%**; pass/fail when the exam has a pass mark |
+| Section / topic breakdown | Per section: score/max, correct/partial/incorrect/unanswered, time. Per topic (each pinned version's topic): score/max, **weakest first** |
+| Time-spent analysis | Per question (column chart with average line + table) and per section; wall time vs time on questions |
+| Answer review "where allowed" | New exam setting **After grading, candidates see**: `full` (their answer, the correct answer, explanation, sample-test results), `own_answers` (their answers and right/wrong, no key or explanations), `none`. Snapshotted per attempt; older attempts count as `full`. Hidden tests are only ever summarised ("hidden: 1 of 2") |
+| Historical comparison | Line chart of % across the candidate's attempts at the same exam (current one highlighted, pass-mark line) |
+| Portal wiring | `/history` (all submitted attempts: score, %, percentile, pass badge, "Grading…" until ready) → `/history/:sessionId`; links from the submitted screen ("View your scorecard") and dashboard activity |
+
+**Rules and decisions**
+- **Percentile** = share of the cohort scoring lower, ties counted half. **Cohort = every candidate's first graded
+  attempt** at the exam (so retakes don't inflate it), plus the attempt itself when it's a retake. Persisted with
+  `cohort_size` and refreshed on read when the cohort has grown (a first attempt starts at the 50th percentile when
+  alone and moves as others finish).
+- **Negative totals** (Step 8's open question): kept raw ("Negative marking took this below zero"), while the percentage
+  and pass/fail use the 0%-floored value.
+- Charts follow the dataviz rules: single hue (`--color-primary`), thin 4px-rounded bars, per-mark hover/focus tooltips,
+  focusable marks, a table for every chart, dependency-free SVG, dark mode via tokens.
+- API: `GET /api/v1/scorecards` (my submitted attempts + result) · `GET /api/v1/scorecards/:sessionId` (owner; admin and
+  support can view any; in-progress attempts 404). Error code `SCORECARD_NOT_FOUND`. Builder/API field `answerReview`.
+  Dev seed: mock test `full`, virtual interview `own_answers` (new seeds only).
+
+**Verified**
+- Backend: typecheck 0, lint, prettier. **97 unit tests** (new: percent floor/rounding, percentile ties/alone, section
+  and topic breakdowns). **58 e2e tests** (new scorecards suite, 5): totals/pass mark/sections/topics/time from a real
+  grading run; percentile vs other candidates' first attempts, refreshed as the cohort grows, and attempt history (incl.
+  a negative score shown as 0%); review policies full / own_answers / none with hidden tests never shown; access (owner,
+  support, not other candidates), rebuild of a missing scorecard, ungraded attempts listed without a result, in-progress
+  404; dashboard recent activity. The Step 3 dashboard test now expects live activity. Frontend: lint, prettier, build.
+- Browser (1280px + 375px, test candidate): the list showed every attempt graded, including the backfilled Step 7 ones;
+  a scorecard with tiles, bars, the time chart (tooltip "11s · Core CS · Correct"), the attempts chart with pass line,
+  and answer review (your answer vs correct answer + explanation, −0.25 on a wrong MCQ, code with "hidden: 1 of 2").
+  No horizontal overflow on phones with every review expanded.
+- **Found while testing:** (1) Step 7 attempts had no grading status, so nothing would ever grade them → backfill
+  migration; (2) attempts graded before scorecards existed showed "Grading…" in the list → the list builds missing
+  scorecards; (3) duplicate time-axis labels on short attempts → the axis max rounds to 10 s / 30 s / 1 min…; (4) the
+  percentile caption said "2 candidates" when the cohort was this candidate's own first attempt + retake → reworded.
+  E2E `testTimeout` raised to 20 s: scorecard tests run several take → grade cycles each.
+- Local DB caveat again: the Prisma dev Postgres degraded under load (`bind message…`) mid-session; after
+  `prisma dev stop/start interview-prep` the full suite passed.
+
+**Notes for next steps**
+- Step 10 (analytics): aggregate `scorecards` (sections/topics JSON, percentiles) and `exam_session_items.time_spent_ms`;
+  topics are already sorted weakest-first per scorecard, a natural start for recommendations.
+- Step 13 (audit log): staff views of other candidates' scorecards (`GET /scorecards/:id` by admin/support) could be logged.
+- Step 17 (gamification): streaks can count submitted attempts from `/scorecards`.

@@ -99,7 +99,11 @@ export function DashboardPage() {
             <ul className={styles.list}>
               {recentActivity.data.map((a) => (
                 <li key={a.id}>
-                  <span>{a.title}</span>
+                  {a.type === 'practice' ? (
+                    <span>{a.title}</span>
+                  ) : (
+                    <Link to={`/history/${a.id}`}>{a.title}</Link>
+                  )}
                   <span className={styles.meta}>
                     {a.result && `${a.result} · `}
                     {new Date(a.occurredAt).toLocaleDateString()}

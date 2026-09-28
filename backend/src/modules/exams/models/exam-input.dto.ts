@@ -13,7 +13,11 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { ExamKind, ExamStatus } from '../../../generated/prisma/enums.js';
+import {
+  AnswerReviewPolicy,
+  ExamKind,
+  ExamStatus,
+} from '../../../generated/prisma/enums.js';
 import { EXAM_LIMITS } from './exam-rules.js';
 
 const trim = ({ value }: { value: unknown }) =>
@@ -114,6 +118,10 @@ export class ExamInputDto {
   @Min(0)
   @Max(100)
   passPercent?: number | null;
+
+  /** What candidates see after grading (FRD §4.8). */
+  @IsIn(Object.values(AnswerReviewPolicy))
+  answerReview: AnswerReviewPolicy = 'full';
 
   @ValidateNested({ each: true })
   @Type(() => ExamSectionInputDto)

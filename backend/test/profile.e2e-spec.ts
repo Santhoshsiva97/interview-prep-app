@@ -188,13 +188,14 @@ describe.skipIf(!DB_URL)('Client portal: profile & dashboard (e2e)', () => {
     expect(t.storage.objects.has(stored[0])).toBe(false);
   });
 
-  it('serves the dashboard with live completeness and placeholder widgets', async () => {
+  it('serves the dashboard with live completeness, live activity and placeholder widgets', async () => {
     const { body } = await authed(http().get('/api/v1/dashboard')).expect(200);
     expect(body.user.name).toBe('Priya Sharma');
     expect(body.profileCompleteness.status).toBe('live');
     expect(body.profileCompleteness.data.percent).toBeGreaterThan(11);
     expect(body.streak).toEqual({ status: 'coming_soon', data: null });
-    expect(body.recentActivity).toEqual({ status: 'coming_soon', data: [] });
+    // Live since Step 9 (scorecards); this user hasn't taken any tests.
+    expect(body.recentActivity).toEqual({ status: 'live', data: [] });
     expect(body.recommendedTests).toEqual({ status: 'coming_soon', data: [] });
   });
 });

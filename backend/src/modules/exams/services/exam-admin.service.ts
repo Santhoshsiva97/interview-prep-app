@@ -322,6 +322,7 @@ export class ExamAdminService {
       shuffleOptions: input.shuffleOptions,
       maxAttempts: input.maxAttempts ?? null,
       passPercent: input.passPercent ?? null,
+      answerReview: input.answerReview,
     };
   }
 
@@ -362,6 +363,7 @@ export class ExamAdminService {
       shuffleOptions: exam.shuffleOptions,
       maxAttempts: exam.maxAttempts,
       passPercent: exam.passPercent,
+      answerReview: exam.answerReview,
       publishedAt: exam.publishedAt,
       createdAt: exam.createdAt,
       updatedAt: exam.updatedAt,

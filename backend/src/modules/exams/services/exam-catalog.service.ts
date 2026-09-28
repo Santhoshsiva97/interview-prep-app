@@ -69,6 +69,7 @@ export class ExamCatalogService {
       sectionTimed: exam.sectionTimed,
       pauseOnDisconnect: exam.pauseOnDisconnect,
       passPercent: exam.passPercent,
+      answerReview: exam.answerReview,
       sections: exam.sections.map((s) => ({
         title: s.title,
         description: s.description,

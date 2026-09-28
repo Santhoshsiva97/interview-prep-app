@@ -768,3 +768,8 @@
   font-size: 1rem;
   font-weight: 600;
 }
+
+.scoreLink {
+  margin-top: 6px;
+  font-weight: 600;
+}

@@ -47,6 +47,8 @@ export interface ExamInput {
   shuffleOptions: boolean;
   maxAttempts?: number | null;
   passPercent?: number | null;
+  /** What candidates see after grading (Step 9). */
+  answerReview: 'full' | 'own_answers' | 'none';
   sections: ExamSectionInput[];
 }
 

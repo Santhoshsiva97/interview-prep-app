@@ -801,6 +801,7 @@ export class ExamSessionService {
         shuffleQuestions: exam.shuffleQuestions,
         shuffleOptions: exam.shuffleOptions,
         passPercent: exam.passPercent,
+        answerReview: exam.answerReview,
       },
       sections: exam.sections.map((s) => ({
         title: s.title,

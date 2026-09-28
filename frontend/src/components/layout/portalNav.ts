@@ -28,12 +28,7 @@ export const PORTAL_NAV: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { to: '/tests', label: 'Mock Tests', icon: 'target' },
   { to: '/practice', label: 'Practice Library', icon: 'practice', soon: true },
-  {
-    to: '/history',
-    label: 'History & Scorecards',
-    icon: 'history',
-    soon: true,
-  },
+  { to: '/history', label: 'History & Scorecards', icon: 'history' },
   { to: '/bookmarks', label: 'Bookmarks', icon: 'bookmark', soon: true },
   {
     to: '/subscription',

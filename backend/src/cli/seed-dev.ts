@@ -153,6 +153,7 @@ async function seedExams(db: PrismaService): Promise<string> {
       shuffleOptions: true,
       maxAttempts: null,
       passPercent: 60,
+      answerReview: 'full',
       sections: [
         {
           title: 'Core CS',
@@ -189,6 +190,8 @@ async function seedExams(db: PrismaService): Promise<string> {
       shuffleOptions: false,
       maxAttempts: 3,
       passPercent: null,
+      // Interview practice: candidates see their answers, not the key.
+      answerReview: 'own_answers',
       sections: [
         {
           title: 'Warm-up',

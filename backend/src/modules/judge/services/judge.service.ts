@@ -488,6 +488,7 @@ export class JudgeService
       return;
     }
 
+    const fullyGraded = problems.length === 0;
     await this.prisma.examSession.update({
       where: { id: sessionId },
       data: problems.length
@@ -504,6 +505,23 @@ export class JudgeService
             gradingError: null,
           },
     });
+    if (fullyGraded) {
+      const at = new Date();
+      const data = { scoreCenti: total };
+      await this.prisma.examSessionEvent.create({
+        data: { sessionId, type: 'graded', createdAt: at, data },
+      });
+      await this.lifecycle.emit([
+        {
+          type: 'graded',
+          sessionId,
+          userId: session.userId,
+          examId: session.examId,
+          at,
+          data,
+        },
+      ]);
+    }
   }
 
   /** Runs `tests` and returns the raw result (verdicts are assigned in `saveSubmission`). */

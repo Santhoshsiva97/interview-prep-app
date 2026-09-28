@@ -79,11 +79,15 @@ export function SubmittedSummary({
               <span>
                 {correct} of {items.length} questions fully correct
               </span>
+              <Link to={`/history/${session.id}`} className={styles.scoreLink}>
+                View your scorecard
+              </Link>
             </>
           ) : grading?.status === 'failed' ? (
             <span>
               We couldn’t finish grading your answers yet. We’ll try again, and
-              your score will appear in History & Scorecards.
+              your score will appear in{' '}
+              <Link to="/history">History & Scorecards</Link>.
             </span>
           ) : (
             <span aria-busy="true">Grading your answers…</span>

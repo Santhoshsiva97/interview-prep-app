@@ -8,6 +8,8 @@ export default defineConfig({
     include: ['**/*.e2e-spec.ts'],
     // Suites share one database; run files sequentially.
     fileParallelism: false,
+    // DB-backed flows (take → submit → grade → scorecard) run several requests per test.
+    testTimeout: 20_000,
     // Satisfy env validation; Prisma/Redis are mocked in e2e tests.
     env: {
       NODE_ENV: 'test',
